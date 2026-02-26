@@ -110,6 +110,13 @@ impl DeviceService {
 
         Ok(())
     }
+
+    pub async fn get_app_errors(&self, limit: i64) -> Result<Vec<AppError>, String> {
+        self.repository
+            .list_app_errors(limit)
+            .await
+            .map_err(|e| e.to_string())
+    }
 }
 
 #[cfg(test)]

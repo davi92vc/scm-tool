@@ -10,7 +10,7 @@ O **SCM-TOOL SYSTEM MONITOR** é construído usando **Tauri v2**, **Rust** no ba
 - **MonitoringEngine:** Um executor assíncrono (usa `tokio`) que spawnava tarefas independentes para cada dispositivo monitorado.
   - **Algoritmo de Checagem:**
     - **Status Online:** Verifica a cada 10 segundos.
-    - **Status Offline:** Se falhar 3 vezes consecutivas, muda para Offline.
+    - **Status Offline:** Se falhar 1 vez, muda para Offline.
     - **Recuperação:** Verifica a cada 2 segundos no modo offline para detecção rápida de retorno (em menos de 3 segundos como planejado).
 - **ICMP Service (`surge-ping`):** Usado para enviar pings reais de rede.
 - **SQLite Database (`sqlx`):** Armazena configurações de dispositivos, histórico de `checks`, `transitions` e `app_errors`.
@@ -31,6 +31,8 @@ O **SCM-TOOL SYSTEM MONITOR** é construído usando **Tauri v2**, **Rust** no ba
 3. **MonitoringEngine:** Inicia o loop de pings para o novo dispositivo.
 4. **Backend:** A cada ping bem-sucedido ou falha, emite um `check-event` para o frontend.
 5. **Backend:** Se houver mudança de estado (Up/Down), emite um `transition-event` e dispara uma **Windows Toast Notification**.
+6. **Backend:** Também dispara notificação no primeiro status detectado de cada dispositivo.
+7. **Backend + Frontend:** Se o envio da notificação nativa falhar, o backend registra em `app_errors` e emite `notification-error-event` para exibir aviso visual na UI.
 
 ## Segurança e Performance
 

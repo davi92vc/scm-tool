@@ -1,5 +1,6 @@
 use crate::models::{Check, Device};
 use crate::repository::Repository;
+use serde::Serialize;
 use std::collections::HashMap;
 use std::net::IpAddr;
 use std::str::FromStr;
@@ -9,6 +10,12 @@ use tauri::{AppHandle, Emitter};
 use tauri_plugin_notification::NotificationExt;
 use tokio::sync::Mutex;
 use tokio::time::{sleep, Duration};
+
+#[derive(Serialize)]
+struct NotificationErrorEvent {
+    source: String,
+    message: String,
+}
 
 pub struct MonitoringEngine {
     app_handle: AppHandle,
@@ -138,6 +145,15 @@ async fn run_monitor(
 
         // Transition logic
         if !state_initialized {
+            let status_text = if is_online { "Online" } else { "Offline" };
+            send_device_notification(
+                &app_handle,
+                &repo,
+                &device,
+                format!("{} is {}", device.name, status_text),
+                format!("IP: {} initial status is {}", device.ip, status_text),
+            )
+            .await;
             last_status = is_online;
             state_initialized = true;
         } else if is_online != last_status {
@@ -170,18 +186,19 @@ async fn run_monitor(
             let _ = app_handle.emit("transition-event", &transition);
 
             // Send native notification
-            let title = format!("{} is {}", device.name, transition.to_status);
-            let body = format!(
-                "IP: {} transitioned from {} to {}",
-                device.ip, transition.from_status, transition.to_status
-            );
+            send_device_notification(
+                &app_handle,
+                &repo,
+                &device,
+                format!("{} is {}", device.name, transition.to_status),
+                format!(
+                    "IP: {} transitioned from {} to {}",
+                    device.ip, transition.from_status, transition.to_status
+                ),
+            )
+            .await;
 
-            let _ = app_handle
-                .notification()
-                .builder()
-                .title(title)
-                .body(body)
-                .show();
+            last_status = is_online;
         }
 
         // Wait based on status
@@ -192,6 +209,48 @@ async fn run_monitor(
         };
 
         sleep(interval).await;
+    }
+}
+
+async fn send_device_notification(
+    app_handle: &AppHandle,
+    repo: &Repository,
+    device: &Device,
+    title: String,
+    body: String,
+) {
+    if let Err(error) = app_handle
+        .notification()
+        .builder()
+        .title(title)
+        .body(body)
+        .show()
+    {
+        let error_message = format!(
+            "Failed to show notification for device {} ({}): {}",
+            device.name, device.ip, error
+        );
+
+        eprintln!("{}", error_message);
+
+        if let Err(repo_error) = repo
+            .insert_error(&crate::models::AppError {
+                id: None,
+                source: "NOTIFICATION".to_string(),
+                message: error_message.clone(),
+                timestamp: None,
+            })
+            .await
+        {
+            eprintln!("Failed to persist notification error: {}", repo_error);
+        }
+
+        let event = NotificationErrorEvent {
+            source: "NOTIFICATION".to_string(),
+            message: error_message,
+        };
+
+        let _ = app_handle.emit("notification-error-event", &event);
     }
 }
 

@@ -44,6 +44,18 @@ interface CheckEvent {
   latency_ms: number;
 }
 
+interface AppError {
+  id: number;
+  source: string;
+  message: string;
+  timestamp?: string;
+}
+
+interface NotificationErrorEvent {
+  source: string;
+  message: string;
+}
+
 const useStyles = makeStyles({
   page: {
     width: '100%',
@@ -177,6 +189,7 @@ function App() {
   const [editName, setEditName] = useState('');
   const [editIp, setEditIp] = useState('');
   const [editError, setEditError] = useState<string | null>(null);
+  const [notificationWarning, setNotificationWarning] = useState<string | null>(null);
 
   const fetchDevices = useCallback(async () => {
     try {
@@ -191,6 +204,17 @@ function App() {
     const frameId = window.requestAnimationFrame(() => {
       void fetchDevices();
     });
+
+    void invoke<AppError[]>('get_app_errors')
+      .then((errors) => {
+        const latestNotificationError = errors.find((entry) => entry.source === 'NOTIFICATION');
+        if (latestNotificationError) {
+          setNotificationWarning(latestNotificationError.message);
+        }
+      })
+      .catch((e) => {
+        console.error(e);
+      });
 
     const unlistenCheck = listen<CheckEvent>('check-event', (event) => {
       setStatusMap(prev => ({
@@ -208,10 +232,15 @@ function App() {
       fetchDevices();
     });
 
+    const unlistenNotificationError = listen<NotificationErrorEvent>('notification-error-event', (event) => {
+      setNotificationWarning(event.payload.message);
+    });
+
     return () => {
       window.cancelAnimationFrame(frameId);
       unlistenCheck.then(u => u());
       unlistenTransition.then(u => u());
+      unlistenNotificationError.then(u => u());
     };
   }, [fetchDevices]);
 
@@ -347,6 +376,12 @@ function App() {
         {maxReached && !isAdding && (
           <MessageBar intent="warning">
             <MessageBarBody>Limite do MVP atingido (máx 4 dispositivos).</MessageBarBody>
+          </MessageBar>
+        )}
+
+        {notificationWarning && (
+          <MessageBar intent="warning">
+            <MessageBarBody>{notificationWarning}</MessageBarBody>
           </MessageBar>
         )}
 

@@ -15,13 +15,15 @@ O **SCM-TOOL SYSTEM MONITOR** é uma aplicação para Windows desenvolvida para 
 ### 2. Monitoramento
 
 - **Online (Verde):** O dispositivo está respondendo aos pings.
-- **Offline (Vermelho):** O dispositivo falhou em 3 tentativas consecutivas.
+- **Offline (Vermelho):** O dispositivo falhou em 1 tentativa de ping.
 - **Latência:** Exibe o tempo de resposta em milissegundos.
 - **Timestamp:** Mostra o horário da última verificação.
 
 ### 3. Notificações
 
-- Se um dispositivo mudar de Online para Offline ou vice-versa, o Windows exibirá uma notificação no canto da tela.
+- O app mostra notificação nativa do Windows quando um dispositivo muda de Online para Offline (ou vice-versa).
+- O app também notifica no primeiro status detectado após iniciar o monitoramento.
+- Se o Windows bloquear/falhar a notificação nativa, a aplicação mostra um aviso visual na tela e registra o erro internamente.
 
 ### 4. Segundo Plano (Tray)
 

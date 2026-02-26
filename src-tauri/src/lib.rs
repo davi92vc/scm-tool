@@ -1,7 +1,7 @@
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
 
 use crate::domain::DeviceService;
-use crate::models::Device;
+use crate::models::{AppError, Device};
 use crate::monitor::MonitoringEngine;
 use crate::repository::Repository;
 use sqlx::SqlitePool;
@@ -20,6 +20,13 @@ async fn get_devices(pool: State<'_, SqlitePool>) -> Result<Vec<Device>, String>
     let repo = Repository::new(pool.inner().clone());
     let service = DeviceService::new(repo);
     service.get_all_devices().await
+}
+
+#[tauri::command]
+async fn get_app_errors(pool: State<'_, SqlitePool>) -> Result<Vec<AppError>, String> {
+    let repo = Repository::new(pool.inner().clone());
+    let service = DeviceService::new(repo);
+    service.get_app_errors(25).await
 }
 
 #[tauri::command]
@@ -80,6 +87,7 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .invoke_handler(tauri::generate_handler![
             get_devices,
+            get_app_errors,
             add_device,
             update_device,
             remove_device

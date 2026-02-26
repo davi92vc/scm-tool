@@ -85,4 +85,13 @@ impl Repository {
             .await?;
         Ok(result.last_insert_rowid())
     }
+
+    pub async fn list_app_errors(&self, limit: i64) -> Result<Vec<AppError>, sqlx::Error> {
+        sqlx::query_as::<_, AppError>(
+            "SELECT * FROM app_errors ORDER BY id DESC LIMIT ?",
+        )
+        .bind(limit)
+        .fetch_all(&self.pool)
+        .await
+    }
 }
