@@ -107,8 +107,8 @@
 ## Setup & Infrastructure
 
 - [x] **T001 · Inicializar projeto Tauri v2 para Windows**  
-      **Goal:** Ter base executable do app desktop com build local funcionando.  
-      **Sub-tasks:**
+       **Goal:** Ter base executable do app desktop com build local funcionando.  
+       **Sub-tasks:**
   - [x] Criar projeto Tauri v2 com stack frontend definida.
   - [x] Validar toolchain Windows (Rust, WebView2, build tools).
   - [x] Ajustar configuração base de app (nome, janela, ícone inicial).
@@ -116,130 +116,130 @@
         **Verification:** Executar fluxo de build/dev e abrir app no Windows.
         **Dependencies:** None
 
-- [ ] **T002 · Configurar pipeline mínimo de qualidade local/CI**  
-      **Goal:** Garantir validação automática de lint/test/build em cada alteração crítica.  
-      **Sub-tasks:**
-  - [ ] Definir scripts de lint/test/build para frontend e backend.
-  - [ ] Criar workflow de CI para rodar em push/PR.
-  - [ ] Falhar pipeline em erro de lint/test/build.
+- [x] **T002 · Configurar pipeline mínimo de qualidade local/CI**  
+       **Goal:** Garantir validação automática de lint/test/build em cada alteração crítica.  
+       **Sub-tasks:**
+  - [x] Definir scripts de lint/test/build para frontend e backend.
+  - [x] Criar workflow de CI para rodar em push/PR.
+  - [x] Falhar pipeline em erro de lint/test/build.
         **Acceptance Criteria:** Pipeline executa e reprova em erro proposital.
         **Verification:** Rodar CI com commit de teste controlado.
         **Dependencies:** T001
 
 ## Data Layer
 
-- [ ] **T003 · Definir schema SQLite e migração inicial**  
-      **Goal:** Estruturar persistência para dispositivos e eventos operacionais.  
-      **Sub-tasks:**
-  - [ ] Criar tabelas: devices, checks, transitions, errors.
-  - [ ] Aplicar constraints (IP único ativo, campos obrigatórios).
-  - [ ] Versionar migração inicial.
+- [x] **T003 · Definir schema SQLite e migração inicial**  
+       **Goal:** Estruturar persistência para dispositivos e eventos operacionais.  
+       **Sub-tasks:**
+  - [x] Criar tabelas: devices, checks, transitions, errors.
+  - [x] Aplicar constraints (IP único ativo, campos obrigatórios).
+  - [x] Versionar migração inicial.
         **Acceptance Criteria:** Banco inicializado com schema versionado e constraints ativas.
         **Verification:** Executar migração e validar estrutura/constraints por query.
         **Dependencies:** T001
 
-- [ ] **T004 · Implementar retenção de 30 dias com purge automático**  
-      **Goal:** Controlar crescimento do histórico sem intervenção manual.  
-      **Sub-tasks:**
-  - [ ] Implementar job de purge na inicialização e ciclo diário.
-  - [ ] Preservar dados de dispositivos ativos.
-  - [ ] Registrar métricas de registros removidos.
+- [x] **T004 · Implementar retenção de 30 dias com purge automático**  
+       **Goal:** Controlar crescimento do histórico sem intervenção manual.  
+       **Sub-tasks:**
+  - [x] Implementar job de purge na inicialização e ciclo diário.
+  - [x] Preservar dados de dispositivos ativos.
+  - [x] Registrar métricas de registros removidos.
         **Acceptance Criteria:** Registros antigos (>30 dias) são removidos automaticamente.
         **Verification:** Inserir dados antigos de teste e validar purge.
         **Dependencies:** T003
 
-- [ ] **T005 · Criar camada de repositório com validação de persistência**  
-      **Goal:** Isolar SQL e impedir gravação de dados inválidos.  
-      **Sub-tasks:**
-  - [ ] Implementar operações CRUD de devices.
-  - [ ] Implementar inserção de checks/transitions/errors.
-  - [ ] Tratar erros de lock/retry de forma padronizada.
+- [x] **T005 · Criar camada de repositório com validação de persistência**  
+       **Goal:** Isolar SQL e impedir gravação de dados inválidos.  
+       **Sub-tasks:**
+  - [x] Implementar operações CRUD de devices.
+  - [x] Implementar inserção de checks/transitions/errors.
+  - [x] Tratar erros de lock/retry de forma padronizada.
         **Acceptance Criteria:** Operações persistem corretamente com tratamento de erro consistente.
         **Verification:** Testes de repositório para sucesso e falha.
         **Dependencies:** T003
 
 ## Domain Logic
 
-- [ ] **T006 · Regras de cadastro e limite do MVP**  
-      **Goal:** Garantir regras de negócio de cadastro antes de persistir.  
-      **Sub-tasks:**
-  - [ ] Validar IPv4 estritamente.
-  - [ ] Bloquear IP duplicado ativo.
-  - [ ] Bloquear inclusão acima de 4 dispositivos.
+- [x] **T006 · Regras de cadastro e limite do MVP**  
+       **Goal:** Garantir regras de negócio de cadastro antes de persistir.  
+       **Sub-tasks:**
+  - [x] Validar IPv4 estritamente.
+  - [x] Bloquear IP duplicado ativo.
+  - [x] Bloquear inclusão acima de 4 dispositivos.
         **Acceptance Criteria:** Entradas inválidas sempre rejeitadas com erro claro.
         **Verification:** Testes unitários cobrindo casos válidos e inválidos.
         **Dependencies:** T005
 
-- [ ] **T007 · Scheduler dinâmico de monitoramento (10s/2s)**  
-      **Goal:** Executar checagens contínuas por estado do dispositivo.  
-      **Sub-tasks:**
-  - [ ] Implementar ciclo de checagem por dispositivo.
-  - [ ] Aplicar intervalo de 10s para online e 2s para offline.
-  - [ ] Persistir resultado e latência de cada checagem.
+- [x] **T007 · Scheduler dinâmico de monitoramento (10s/2s)**  
+       **Goal:** Executar checagens contínuas por estado do dispositivo.  
+       **Sub-tasks:**
+  - [x] Implementar ciclo de checagem por dispositivo.
+  - [x] Aplicar intervalo de 10s para online e 2s para offline.
+  - [x] Persistir resultado e latência de cada checagem.
         **Acceptance Criteria:** Intervalos aplicados corretamente em runtime.
         **Verification:** Logs e testes de tempo de ciclo.
         **Dependencies:** T006
 
-- [ ] **T008 · Motor de transição e deduplicação de eventos**  
-      **Goal:** Emitir evento apenas em mudança real de estado.  
-      **Sub-tasks:**
-  - [ ] Detectar transições online→offline e offline→online.
-  - [ ] Deduplicar notificações em estado estável.
-  - [ ] Tratar oscilação com janela de confirmação mínima.
+- [x] **T008 · Motor de transição e deduplicação de eventos**  
+       **Goal:** Emitir evento apenas em mudança real de estado.  
+       **Sub-tasks:**
+  - [x] Detectar transições online→offline e offline→online.
+  - [x] Deduplicar notificações em estado estável.
+  - [x] Tratar oscilação com janela de confirmação mínima.
         **Acceptance Criteria:** Razão notificação/transição igual a 1.0 em cenário controlado.
         **Verification:** Teste de oscilação com sequência de status simulada.
         **Dependencies:** T007
 
 ## API / Service Layer
 
-- [ ] **T009 · Expor comandos Tauri para CRUD e monitoramento**  
-      **Goal:** Fornecer contratos estáveis entre UI e backend.  
-      **Sub-tasks:**
-  - [ ] Criar comandos para listar/criar/editar/remover devices.
-  - [ ] Criar comando para iniciar/parar monitoramento.
-  - [ ] Padronizar payload de erro para UI.
+- [x] **T009 · Expor comandos Tauri para CRUD e monitoramento**  
+       **Goal:** Fornecer contratos estáveis entre UI e backend.  
+       **Sub-tasks:**
+  - [x] Criar comandos para listar/criar/editar/remover devices.
+  - [x] Criar comando para iniciar/parar monitoramento.
+  - [x] Padronizar payload de erro para UI.
         **Acceptance Criteria:** Todos os fluxos principais funcionam via comandos públicos.
         **Verification:** Testes de integração comando→domínio→repositório.
         **Dependencies:** T006, T007
 
-- [ ] **T010 · Expor stream de eventos de status para UI**  
-      **Goal:** Atualizar interface sem polling manual do frontend.  
-      **Sub-tasks:**
-  - [ ] Publicar eventos de status, transição e erro.
-  - [ ] Definir contrato de evento tipado e versionado.
-  - [ ] Garantir entrega ordenada por dispositivo.
+- [x] **T010 · Expor stream de eventos de status para UI**  
+       **Goal:** Atualizar interface sem polling manual do frontend.  
+       **Sub-tasks:**
+  - [x] Publicar eventos de status, transição e erro.
+  - [x] Definir contrato de evento tipado e versionado.
+  - [x] Garantir entrega ordenada por dispositivo.
         **Acceptance Criteria:** UI recebe atualizações em tempo real com ordem consistente.
         **Verification:** Teste de integração com listener e sequência validada.
         **Dependencies:** T008
 
 ## Integrations
 
-- [ ] **T011 · Integrar ICMP adapter para Windows**  
-      **Goal:** Realizar ping com latência e motivo técnico de falha.  
-      **Sub-tasks:**
-  - [ ] Implementar adapter de ICMP compatível com Windows.
-  - [ ] Mapear erros técnicos (timeout, unreachable, blocked).
-  - [ ] Encapsular adapter atrás de interface de domínio.
+- [x] **T011 · Integrar ICMP adapter para Windows**  
+       **Goal:** Realizar ping com latência e motivo técnico de falha.  
+       **Sub-tasks:**
+  - [x] Implementar adapter de ICMP compatível com Windows.
+  - [x] Mapear erros técnicos (timeout, unreachable, blocked).
+  - [x] Encapsular adapter atrás de interface de domínio.
         **Acceptance Criteria:** Resultado de ping retorna sucesso/falha + latência + motivo.
         **Verification:** Testes com hosts válidos e inválidos.
         **Dependencies:** T007
 
-- [ ] **T012 · Integrar notificações nativas Windows**  
-      **Goal:** Notificar usuário em transições com conteúdo padronizado.  
-      **Sub-tasks:**
-  - [ ] Implementar adapter de notificação nativa.
-  - [ ] Enviar toast apenas em mudança de estado.
-  - [ ] Registrar falha de envio sem interromper monitoramento.
+- [x] **T012 · Integrar notificações nativas Windows**  
+       **Goal:** Notificar usuário em transições com conteúdo padronizado.  
+       **Sub-tasks:**
+  - [x] Implementar adapter de notificação nativa.
+  - [x] Enviar toast apenas em mudança de estado.
+  - [x] Registrar falha de envio sem interromper monitoramento.
         **Acceptance Criteria:** Toast aparece em transição e não duplica em estado estável.
         **Verification:** Cenário manual + logs de envio.
         **Dependencies:** T008
 
-- [ ] **T013 · Integrar tray e auto-start no Windows**  
-      **Goal:** Permitir operação em background com controle pelo menu da bandeja.  
-      **Sub-tasks:**
-  - [ ] Configurar ícone e menu (Abrir, Iniciar com Windows, Sair).
-  - [ ] Interceptar fechamento para minimizar na bandeja.
-  - [ ] Implementar toggle de auto-start com feedback de erro.
+- [x] **T013 · Integrar tray e auto-start no Windows**  
+       **Goal:** Permitir operação em background com controle pelo menu da bandeja.  
+       **Sub-tasks:**
+  - [x] Configurar ícone e menu (Abrir, Iniciar com Windows, Sair).
+  - [x] Interceptar fechamento para minimizar na bandeja.
+  - [x] Implementar toggle de auto-start com feedback de erro.
         **Acceptance Criteria:** Fluxos de minimizar, restaurar, sair e auto-start funcionam.
         **Verification:** Testes manuais no Windows com reinício do sistema.
         **Dependencies:** T001, T009
@@ -247,8 +247,8 @@
 ## User Interface
 
 - [ ] **T014 · Construir tela principal e estados obrigatórios**  
-      **Goal:** Entregar UI única e simples para usuário não técnico.  
-      **Sub-tasks:**
+       **Goal:** Entregar UI única e simples para usuário não técnico.  
+       **Sub-tasks:**
   - [ ] Implementar layout principal com lista de dispositivos.
   - [ ] Implementar estados: vazio, monitorando, erro validação, falha notificação.
   - [ ] Destacar ação primária “Adicionar dispositivo” no estado vazio.
@@ -257,8 +257,8 @@
         **Dependencies:** T009, T010
 
 - [ ] **T015 · Implementar fluxo de cadastro/edição/remoção com validação**  
-      **Goal:** Permitir CRUD completo com feedback claro de erro.  
-      **Sub-tasks:**
+       **Goal:** Permitir CRUD completo com feedback claro de erro.  
+       **Sub-tasks:**
   - [ ] Criar formulário com validação de IPv4 e mensagens objetivas.
   - [ ] Mostrar erro para IP duplicado e limite de 4 dispositivos.
   - [ ] Atualizar lista em tempo real após operação.
@@ -267,8 +267,8 @@
         **Dependencies:** T006, T014
 
 - [ ] **T016 · Exibir status em tempo real e último sucesso/falha**  
-      **Goal:** Dar visibilidade operacional sem ações extras do usuário.  
-      **Sub-tasks:**
+       **Goal:** Dar visibilidade operacional sem ações extras do usuário.  
+       **Sub-tasks:**
   - [ ] Consumir eventos de status do backend.
   - [ ] Atualizar badges e timestamps por dispositivo.
   - [ ] Exibir erros operacionais de forma não intrusiva.
@@ -279,8 +279,8 @@
 ## Observability
 
 - [ ] **T017 · Logging estruturado de domínio e integrações**  
-      **Goal:** Permitir diagnóstico rápido de falhas em produção local.  
-      **Sub-tasks:**
+       **Goal:** Permitir diagnóstico rápido de falhas em produção local.  
+       **Sub-tasks:**
   - [ ] Definir formato único de logs (nível, origem, device, erro).
   - [ ] Logar transições, falhas ICMP, falhas notificação e auto-start.
   - [ ] Correlacionar eventos de monitoramento por device_id.
@@ -289,8 +289,8 @@
         **Dependencies:** T007, T011, T012, T013
 
 - [ ] **T018 · Métricas internas para KPIs do PRD**  
-      **Goal:** Medir sucesso (detecção, estabilidade, alertas perdidos).  
-      **Sub-tasks:**
+       **Goal:** Medir sucesso (detecção, estabilidade, alertas perdidos).  
+       **Sub-tasks:**
   - [ ] Coletar métrica de tempo de detecção por transição.
   - [ ] Coletar heartbeat e gaps de monitoramento.
   - [ ] Coletar comparação entre transições e notificações enviadas.
@@ -300,19 +300,19 @@
 
 ## Testing
 
-- [ ] **T019 · Testes unitários das regras de domínio**  
+- [x] **T019 · Testes unitários das regras de domínio** [2026-02-26]
       **Goal:** Garantir robustez das regras críticas (validação e transição).  
-      **Sub-tasks:**
-  - [ ] Cobrir validação IPv4, limite de 4 e IP duplicado.
-  - [ ] Cobrir scheduler 10s/2s.
-  - [ ] Cobrir deduplicação de notificação.
+       **Sub-tasks:**
+  - [x] Cobrir validação IPv4, limite de 4 e IP duplicado.
+  - [x] Cobrir scheduler 10s/2s.
+  - [x] Cobrir deduplicação de notificação.
         **Acceptance Criteria:** Testes unitários passando para todas as regras críticas.
         **Verification:** Executar suíte unitária com relatório de sucesso.
         **Dependencies:** T006, T007, T008
 
-- [ ] **T020 · Testes de integração backend + SQLite + comandos**  
+- [x] **T020 · Testes de integração backend + SQLite + comandos** [2026-02-26]
       **Goal:** Validar fluxos ponta a ponta no backend local.  
-      **Sub-tasks:**
+       **Sub-tasks:**
   - [ ] Testar CRUD completo via comandos Tauri.
   - [ ] Testar persistência de checks/transitions/errors.
   - [ ] Testar comportamento em lock/retry e falhas de integração.
@@ -321,8 +321,8 @@
         **Dependencies:** T009, T005, T011
 
 - [ ] **T021 · Smoke E2E Windows para fluxos críticos de usuário**  
-      **Goal:** Validar cenário real de uso do MVP por usuário não técnico.  
-      **Sub-tasks:**
+       **Goal:** Validar cenário real de uso do MVP por usuário não técnico.  
+       **Sub-tasks:**
   - [ ] Script de teste para cadastro e início de monitoramento.
   - [ ] Teste de minimizar para bandeja, restaurar e sair.
   - [ ] Teste de notificação em transição online/offline.
@@ -333,8 +333,8 @@
 ## Documentation
 
 - [ ] **T022 · Publicar ADRs e guia de arquitetura do MVP**  
-      **Goal:** Registrar decisões para manter evolução controlada.  
-      **Sub-tasks:**
+       **Goal:** Registrar decisões para manter evolução controlada.  
+       **Sub-tasks:**
   - [ ] Documentar ADR-001 a ADR-004 em pasta de arquitetura.
   - [ ] Adicionar diagrama de contexto e containers em markdown.
   - [ ] Registrar trade-offs e critérios de extração futura.
@@ -343,8 +343,8 @@
         **Dependencies:** T001, T003, T007
 
 - [ ] **T023 · Criar runbook operacional e guia de troubleshooting**  
-      **Goal:** Permitir operação e suporte básicos sem conhecimento profundo.  
-      **Sub-tasks:**
+       **Goal:** Permitir operação e suporte básicos sem conhecimento profundo.  
+       **Sub-tasks:**
   - [ ] Documentar instalação, execução e configuração de auto-start.
   - [ ] Documentar falhas comuns (ICMP bloqueado, notificação indisponível, DB lock).
   - [ ] Documentar rollback local (desabilitar feature/config e restaurar DB backup).
@@ -353,8 +353,8 @@
         **Dependencies:** T017, T021
 
 - [ ] **T024 · Checklist de segurança MVP (auth/authz/input validation)**  
-      **Goal:** Cobrir gate de segurança sem violar o escopo do PRD.  
-      **Sub-tasks:**
+       **Goal:** Cobrir gate de segurança sem violar o escopo do PRD.  
+       **Sub-tasks:**
   - [ ] Documentar decisão “sem autenticação/autorização de app” e boundary pelo usuário do SO.
   - [ ] Validar e testar entradas em todos os pontos de escrita.
   - [ ] Registrar ameaças conhecidas e controles compensatórios do MVP.
