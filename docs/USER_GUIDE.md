@@ -29,6 +29,9 @@ O **SCM-TOOL SYSTEM MONITOR** é uma aplicação para Windows desenvolvida para 
 
 - Ao fechar a janela (clicando no X), a aplicação continua rodando em segundo plano.
 - Você pode encontrar o ícone na área de notificação do Windows (perto do relógio).
+- O ícone da tray fica **verde** quando todos os dispositivos estão online.
+- O ícone da tray fica **vermelho** quando existe pelo menos um dispositivo offline.
+- O ícone padrão é mantido quando não há dispositivos ou enquanto algum dispositivo ainda está em estado inicial.
 - Clique com o botão direito para abrir ou sair da aplicação.
 
 ### 5. Histórico e Limpeza

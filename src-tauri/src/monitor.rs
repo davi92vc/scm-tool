@@ -6,10 +6,15 @@ use std::net::IpAddr;
 use std::str::FromStr;
 use std::sync::Arc;
 use surge_ping::{Client, Config, PingIdentifier, PingSequence};
+use tauri::image::Image;
 use tauri::{AppHandle, Emitter};
 use tauri_plugin_notification::NotificationExt;
 use tokio::sync::Mutex;
 use tokio::time::{sleep, Duration};
+
+const TRAY_ICON_DEFAULT: &[u8] = include_bytes!("../icons/32x32.png");
+const TRAY_ICON_GREEN: &[u8] = include_bytes!("../icons/tray-green.png");
+const TRAY_ICON_RED: &[u8] = include_bytes!("../icons/tray-red.png");
 
 #[derive(Serialize)]
 struct NotificationErrorEvent {
@@ -17,10 +22,19 @@ struct NotificationErrorEvent {
     message: String,
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum TrayStatus {
+    Neutral,
+    AllOnline,
+    HasOffline,
+}
+
 pub struct MonitoringEngine {
     app_handle: AppHandle,
     repository: Arc<Repository>,
     active_monitors: Arc<Mutex<HashMap<i64, MonitorEntry>>>,
+    device_states: Arc<Mutex<HashMap<i64, Option<bool>>>>,
+    tray_status: Arc<Mutex<TrayStatus>>,
     ping_client: Arc<Client>,
 }
 
@@ -39,6 +53,8 @@ impl MonitoringEngine {
             app_handle,
             repository: Arc::new(repository),
             active_monitors: Arc::new(Mutex::new(HashMap::new())),
+            device_states: Arc::new(Mutex::new(HashMap::new())),
+            tray_status: Arc::new(Mutex::new(TrayStatus::Neutral)),
             ping_client: Arc::new(client),
         }
     }
@@ -51,9 +67,11 @@ impl MonitoringEngine {
             .map_err(|e| e.to_string())?;
 
         let mut active_monitors = self.active_monitors.lock().await;
+        let mut device_states = self.device_states.lock().await;
 
         // Stop monitors for removed devices
         let current_ids: Vec<i64> = devices.iter().filter_map(|d| d.id).collect();
+        device_states.retain(|id, _| current_ids.contains(id));
         active_monitors.retain(|id, entry| {
             if !current_ids.contains(id) {
                 entry.handle.abort();
@@ -76,16 +94,20 @@ impl MonitoringEngine {
                 if let Some(old_entry) = active_monitors.remove(&id) {
                     old_entry.handle.abort();
                 }
+                device_states.insert(id, None);
             }
 
             if !active_monitors.contains_key(&id) {
                 let repo = Arc::clone(&self.repository);
                 let app_handle = self.app_handle.clone();
                 let client = Arc::clone(&self.ping_client);
+                let states = Arc::clone(&self.device_states);
+                let tray_status = Arc::clone(&self.tray_status);
                 let monitor_name = device.name.clone();
                 let monitor_ip = device.ip.clone();
+                device_states.entry(id).or_insert(None);
                 let handle = tokio::spawn(async move {
-                    run_monitor(app_handle, repo, client, device).await;
+                    run_monitor(app_handle, repo, client, states, tray_status, device).await;
                 });
                 active_monitors.insert(
                     id,
@@ -98,6 +120,16 @@ impl MonitoringEngine {
             }
         }
 
+        drop(device_states);
+        drop(active_monitors);
+
+        refresh_tray_icon(
+            &self.app_handle,
+            Arc::clone(&self.device_states),
+            Arc::clone(&self.tray_status),
+        )
+        .await;
+
         Ok(())
     }
 }
@@ -106,8 +138,11 @@ async fn run_monitor(
     app_handle: AppHandle,
     repo: Arc<Repository>,
     client: Arc<Client>,
+    device_states: Arc<Mutex<HashMap<i64, Option<bool>>>>,
+    tray_status: Arc<Mutex<TrayStatus>>,
     device: Device,
 ) {
+    let device_id = device.id.unwrap();
     let mut last_status = true;
     let mut state_initialized = false;
     let ip = IpAddr::from_str(&device.ip).expect("invalid IP stored in DB");
@@ -125,7 +160,7 @@ async fn run_monitor(
         // Persist check
         let check = Check {
             id: None,
-            device_id: device.id.unwrap(),
+            device_id,
             timestamp: None,
             is_online,
             latency_ms: Some(latency.as_secs_f64() * 1000.0),
@@ -142,6 +177,15 @@ async fn run_monitor(
 
         // Emit check event
         let _ = app_handle.emit("check-event", &check);
+
+        update_device_status_and_tray_icon(
+            &app_handle,
+            Arc::clone(&device_states),
+            Arc::clone(&tray_status),
+            device_id,
+            Some(is_online),
+        )
+        .await;
 
         // Transition logic
         if !state_initialized {
@@ -160,7 +204,7 @@ async fn run_monitor(
             // Detected transition!
             let transition = crate::models::Transition {
                 id: None,
-                device_id: device.id.unwrap(),
+                device_id,
                 from_status: if last_status {
                     "Online".to_string()
                 } else {
@@ -252,6 +296,81 @@ async fn send_device_notification(
 
         let _ = app_handle.emit("notification-error-event", &event);
     }
+}
+
+async fn update_device_status_and_tray_icon(
+    app_handle: &AppHandle,
+    device_states: Arc<Mutex<HashMap<i64, Option<bool>>>>,
+    tray_status: Arc<Mutex<TrayStatus>>,
+    device_id: i64,
+    is_online: Option<bool>,
+) {
+    {
+        let mut states = device_states.lock().await;
+        states.insert(device_id, is_online);
+    }
+
+    refresh_tray_icon(app_handle, device_states, tray_status).await;
+}
+
+async fn refresh_tray_icon(
+    app_handle: &AppHandle,
+    device_states: Arc<Mutex<HashMap<i64, Option<bool>>>>,
+    tray_status: Arc<Mutex<TrayStatus>>,
+) {
+    let next_status = {
+        let states = device_states.lock().await;
+        calculate_tray_status(&states)
+    };
+
+    {
+        let mut current_status = tray_status.lock().await;
+        if *current_status == next_status {
+            return;
+        }
+        *current_status = next_status;
+    }
+
+    if let Err(error) = apply_tray_icon(app_handle, next_status) {
+        eprintln!("Failed to update tray icon: {}", error);
+    }
+}
+
+fn calculate_tray_status(states: &HashMap<i64, Option<bool>>) -> TrayStatus {
+    if states.is_empty() {
+        return TrayStatus::Neutral;
+    }
+
+    if states.values().any(|status| status.is_none()) {
+        return TrayStatus::Neutral;
+    }
+
+    if states
+        .values()
+        .any(|status| matches!(status, Some(false)))
+    {
+        return TrayStatus::HasOffline;
+    }
+
+    TrayStatus::AllOnline
+}
+
+fn apply_tray_icon(app_handle: &AppHandle, status: TrayStatus) -> Result<(), String> {
+    let tray = app_handle
+        .tray_by_id("tray")
+        .ok_or_else(|| "tray not found".to_string())?;
+
+    let icon_bytes = match status {
+        TrayStatus::Neutral => TRAY_ICON_DEFAULT,
+        TrayStatus::AllOnline => TRAY_ICON_GREEN,
+        TrayStatus::HasOffline => TRAY_ICON_RED,
+    };
+
+    let icon = Image::from_bytes(icon_bytes)
+        .map(|image| image.to_owned())
+        .map_err(|e| e.to_string())?;
+
+    tray.set_icon(Some(icon)).map_err(|e| e.to_string())
 }
 
 async fn perform_ping(client: &Client, ip: IpAddr) -> Result<(), String> {

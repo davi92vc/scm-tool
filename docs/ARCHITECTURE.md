@@ -7,6 +7,7 @@ O **SCM-TOOL SYSTEM MONITOR** é construído usando **Tauri v2**, **Rust** no ba
 ### 1. Backend (Rust)
 
 - **Tauri Application:** Gerencia o ciclo de vida da janela do Windows e a integração com o tray.
+- **Tray Status Aggregator:** Calcula estado agregado dos dispositivos e atualiza ícone da tray em runtime (verde quando todos online, vermelho quando há offline, neutro no estado inicial/sem devices).
 - **MonitoringEngine:** Um executor assíncrono (usa `tokio`) que spawnava tarefas independentes para cada dispositivo monitorado.
   - **Algoritmo de Checagem:**
     - **Status Online:** Verifica a cada 10 segundos.
