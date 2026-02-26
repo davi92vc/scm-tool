@@ -2,17 +2,20 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use tokio::time::{sleep, Duration};
+use tauri::{AppHandle, Emitter};
 use crate::models::{Check, Device};
 use crate::repository::Repository;
 
 pub struct MonitoringEngine {
+    app_handle: AppHandle,
     repository: Arc<Repository>,
     active_monitors: Arc<Mutex<HashMap<i64, tokio::task::JoinHandle<()>>>>,
 }
 
 impl MonitoringEngine {
-    pub fn new(repository: Repository) -> Self {
+    pub fn new(app_handle: AppHandle, repository: Repository) -> Self {
         Self {
+            app_handle,
             repository: Arc::new(repository),
             active_monitors: Arc::new(Mutex::new(HashMap::new())),
         }
@@ -40,8 +43,9 @@ impl MonitoringEngine {
             let id = device.id.expect("Device ID is required");
             if !active_monitors.contains_key(&id) {
                 let repo = Arc::clone(&self.repository);
+                let app_handle = self.app_handle.clone();
                 let handle = tokio::spawn(async move {
-                    run_monitor(repo, device).await;
+                    run_monitor(app_handle, repo, device).await;
                 });
                 active_monitors.insert(id, handle);
             }
@@ -51,7 +55,7 @@ impl MonitoringEngine {
     }
 }
 
-async fn run_monitor(repo: Arc<Repository>, device: Device) {
+async fn run_monitor(app_handle: AppHandle, repo: Arc<Repository>, device: Device) {
     let mut last_status = true; // Assume online for first state comparison
     let mut state_initialized = false;
 
@@ -80,6 +84,9 @@ async fn run_monitor(repo: Arc<Repository>, device: Device) {
             eprintln!("Failed to insert check for device {}: {}", device.id.unwrap(), e);
         }
 
+        // Emit check event
+        let _ = app_handle.emit("check-event", &check);
+
         // Transition logic
         if !state_initialized {
             last_status = is_online;
@@ -98,7 +105,9 @@ async fn run_monitor(repo: Arc<Repository>, device: Device) {
                 eprintln!("Failed to insert transition for device {}: {}", device.id.unwrap(), e);
             }
 
-            // TODO: Emit event to UI (T010) and Notification (T012)
+            // Emit transition event
+            let _ = app_handle.emit("transition-event", &transition);
+            
             last_status = is_online;
         }
 
@@ -112,6 +121,7 @@ async fn run_monitor(repo: Arc<Repository>, device: Device) {
         sleep(interval).await;
     }
 }
+
 
 
 async fn perform_ping(ip: &str) -> Result<(), String> {
