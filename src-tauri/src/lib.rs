@@ -129,6 +129,10 @@ pub fn run() {
                 })
                 .build(app)?;
 
+            if let Some(window) = app_handle.get_webview_window("main") {
+                let _ = window.hide();
+            }
+
             tauri::async_runtime::block_on(async move {
                 let pool = db::init_db(&app_handle)
                     .await
