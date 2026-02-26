@@ -487,12 +487,10 @@ function App() {
           })}
         </div>
 
-        <Divider />
         <footer className={styles.footer}>
-          <Caption1>SCM-TOOL SYSTEM MONITOR</Caption1>
+          <Caption1>SCM-TOOL</Caption1>
           <div className={styles.footerRight}>
-            <Settings16Regular />
-            <Caption1>v1.0.0 (Windows)</Caption1>
+            <Caption1>by Davi v0.1</Caption1>
           </div>
         </footer>
       </div>
