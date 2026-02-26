@@ -52,7 +52,8 @@ impl MonitoringEngine {
 }
 
 async fn run_monitor(repo: Arc<Repository>, device: Device) {
-    let mut is_currently_online = true; // Assume online or check once
+    let mut last_status = true; // Assume online for first state comparison
+    let mut state_initialized = false;
 
     loop {
         // Ping
@@ -79,7 +80,28 @@ async fn run_monitor(repo: Arc<Repository>, device: Device) {
             eprintln!("Failed to insert check for device {}: {}", device.id.unwrap(), e);
         }
 
-        // Transition logic (T008 will refine this)
+        // Transition logic
+        if !state_initialized {
+            last_status = is_online;
+            state_initialized = true;
+        } else if is_online != last_status {
+            // Detected transition!
+            let transition = crate::models::Transition {
+                id: None,
+                device_id: device.id.unwrap(),
+                from_status: if last_status { "Online".to_string() } else { "Offline".to_string() },
+                to_status: if is_online { "Online".to_string() } else { "Offline".to_string() },
+                timestamp: None,
+            };
+
+            if let Err(e) = repo.insert_transition(&transition).await {
+                eprintln!("Failed to insert transition for device {}: {}", device.id.unwrap(), e);
+            }
+
+            // TODO: Emit event to UI (T010) and Notification (T012)
+            last_status = is_online;
+        }
+
         // Wait based on status
         let interval = if is_online {
             Duration::from_secs(10)
@@ -90,6 +112,7 @@ async fn run_monitor(repo: Arc<Repository>, device: Device) {
         sleep(interval).await;
     }
 }
+
 
 async fn perform_ping(ip: &str) -> Result<(), String> {
     // Placeholder for T011 (ICMP Adapter)
