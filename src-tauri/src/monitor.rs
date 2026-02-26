@@ -189,13 +189,16 @@ async fn run_monitor(
 
         // Transition logic
         if !state_initialized {
-            let status_text = if is_online { "Online" } else { "Offline" };
+            let status_text = status_label_pt_br(is_online);
             send_device_notification(
                 &app_handle,
                 &repo,
                 &device,
-                format!("{} is {}", device.name, status_text),
-                format!("IP: {} initial status is {}", device.ip, status_text),
+                format!("Status inicial detectado: {}", device.name),
+                format!(
+                    "O dispositivo {} (IP: {}) está {}.",
+                    device.name, device.ip, status_text
+                ),
             )
             .await;
             last_status = is_online;
@@ -230,14 +233,16 @@ async fn run_monitor(
             let _ = app_handle.emit("transition-event", &transition);
 
             // Send native notification
+            let from_status_text = status_label_pt_br(last_status);
+            let to_status_text = status_label_pt_br(is_online);
             send_device_notification(
                 &app_handle,
                 &repo,
                 &device,
-                format!("{} is {}", device.name, transition.to_status),
+                format!("Mudança de status: {}", device.name),
                 format!(
-                    "IP: {} transitioned from {} to {}",
-                    device.ip, transition.from_status, transition.to_status
+                    "O dispositivo {} (IP: {}) mudou de {} para {}.",
+                    device.name, device.ip, from_status_text, to_status_text
                 ),
             )
             .await;
@@ -271,7 +276,7 @@ async fn send_device_notification(
         .show()
     {
         let error_message = format!(
-            "Failed to show notification for device {} ({}): {}",
+            "Não foi possível exibir a notificação do dispositivo {} ({}): {}",
             device.name, device.ip, error
         );
 
@@ -286,7 +291,7 @@ async fn send_device_notification(
             })
             .await
         {
-            eprintln!("Failed to persist notification error: {}", repo_error);
+            eprintln!("Não foi possível registrar o erro de notificação: {}", repo_error);
         }
 
         let event = NotificationErrorEvent {
@@ -295,6 +300,14 @@ async fn send_device_notification(
         };
 
         let _ = app_handle.emit("notification-error-event", &event);
+    }
+}
+
+fn status_label_pt_br(is_online: bool) -> &'static str {
+    if is_online {
+        "online"
+    } else {
+        "offline"
     }
 }
 
