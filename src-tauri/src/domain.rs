@@ -77,6 +77,39 @@ impl DeviceService {
 
         Ok(())
     }
+
+    pub async fn update_device(&self, id: i64, name: &str, ip: &str) -> Result<(), String> {
+        if !Self::validate_ipv4(ip) {
+            return Err("Invalid IPv4 address".to_string());
+        }
+
+        let devices = self
+            .repository
+            .get_all_devices()
+            .await
+            .map_err(|e| e.to_string())?;
+
+        if devices
+            .iter()
+            .any(|d| d.id != Some(id) && d.ip == ip)
+        {
+            return Err("IP address already monitored".to_string());
+        }
+
+        self.repository
+            .update_device(id, name, ip)
+            .await
+            .map_err(|e| e.to_string())?;
+
+        let _ = self.repository.insert_error(&AppError {
+            id: None,
+            source: "AUDIT".to_string(),
+            message: format!("Device updated: {} ({}) with ID: {}", name, ip, id),
+            timestamp: None,
+        }).await;
+
+        Ok(())
+    }
 }
 
 #[cfg(test)]

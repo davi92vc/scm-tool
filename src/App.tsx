@@ -26,6 +26,7 @@ import {
   Add24Regular,
   Clock24Regular,
   Delete24Regular,
+  Edit24Regular,
   Settings16Regular,
 } from '@fluentui/react-icons';
 import './App.css';
@@ -172,6 +173,10 @@ function App() {
   const [newName, setNewName] = useState('');
   const [newIp, setNewIp] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [editingDeviceId, setEditingDeviceId] = useState<number | null>(null);
+  const [editName, setEditName] = useState('');
+  const [editIp, setEditIp] = useState('');
+  const [editError, setEditError] = useState<string | null>(null);
 
   const fetchDevices = useCallback(async () => {
     try {
@@ -237,6 +242,39 @@ function App() {
     }
   };
 
+  const closeEditForm = () => {
+    setEditingDeviceId(null);
+    setEditName('');
+    setEditIp('');
+    setEditError(null);
+  };
+
+  const openEditForm = (device: Device) => {
+    setEditingDeviceId(device.id);
+    setEditName(device.name);
+    setEditIp(device.ip);
+    setEditError(null);
+  };
+
+  const handleEdit = async () => {
+    if (editingDeviceId === null) {
+      return;
+    }
+
+    try {
+      setEditError(null);
+      await invoke('update_device', {
+        id: editingDeviceId,
+        name: editName,
+        ip: editIp,
+      });
+      closeEditForm();
+      fetchDevices();
+    } catch (e: unknown) {
+      setEditError(e instanceof Error ? e.message : String(e));
+    }
+  };
+
   const handleDialogOpenChange = (_event: unknown, data: { open: boolean }) => {
     setIsAdding(data.open);
     if (!data.open) {
@@ -244,8 +282,15 @@ function App() {
     }
   };
 
+  const handleEditDialogOpenChange = (_event: unknown, data: { open: boolean }) => {
+    if (!data.open) {
+      closeEditForm();
+    }
+  };
+
   const maxReached = devices.length >= 4;
   const canSave = newName.trim().length > 0 && newIp.trim().length > 0;
+  const canSaveEdit = editName.trim().length > 0 && editIp.trim().length > 0;
 
   return (
     <div className={styles.page}>
@@ -305,6 +350,43 @@ function App() {
           </MessageBar>
         )}
 
+        <Dialog open={editingDeviceId !== null} onOpenChange={handleEditDialogOpenChange}>
+          <DialogSurface>
+            <DialogBody>
+              <DialogTitle>Editar dispositivo</DialogTitle>
+              <DialogContent className={styles.dialogContent}>
+                <Field label="Nome">
+                  <Input
+                    value={editName}
+                    onChange={(_, data) => setEditName(data.value)}
+                    placeholder="Ex: Servidor Principal"
+                  />
+                </Field>
+                <Field label="Endereço IP (IPv4)">
+                  <Input
+                    value={editIp}
+                    onChange={(_, data) => setEditIp(data.value)}
+                    placeholder="Ex: 1.1.1.1"
+                  />
+                </Field>
+                {editError && (
+                  <MessageBar intent="error">
+                    <MessageBarBody>{editError}</MessageBarBody>
+                  </MessageBar>
+                )}
+              </DialogContent>
+              <DialogActions>
+                <DialogTrigger disableButtonEnhancement>
+                  <Button appearance="secondary">Cancelar</Button>
+                </DialogTrigger>
+                <Button appearance="primary" onClick={handleEdit} disabled={!canSaveEdit}>
+                  Salvar alterações
+                </Button>
+              </DialogActions>
+            </DialogBody>
+          </DialogSurface>
+        </Dialog>
+
         <div className={styles.list}>
           {devices.length === 0 && !isAdding && (
             <Card>
@@ -351,6 +433,12 @@ function App() {
                       <Caption1 className={styles.initializing}>Aguardando checagem...</Caption1>
                     )}
 
+                    <Button
+                      aria-label={`Editar ${device.name}`}
+                      appearance="subtle"
+                      icon={<Edit24Regular />}
+                      onClick={() => openEditForm(device)}
+                    />
                     <Button
                       aria-label={`Remover ${device.name}`}
                       appearance="subtle"

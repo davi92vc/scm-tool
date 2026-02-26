@@ -13,8 +13,14 @@ use tokio::time::{sleep, Duration};
 pub struct MonitoringEngine {
     app_handle: AppHandle,
     repository: Arc<Repository>,
-    active_monitors: Arc<Mutex<HashMap<i64, tokio::task::JoinHandle<()>>>>,
+    active_monitors: Arc<Mutex<HashMap<i64, MonitorEntry>>>,
     ping_client: Arc<Client>,
+}
+
+struct MonitorEntry {
+    handle: tokio::task::JoinHandle<()>,
+    ip: String,
+    name: String,
 }
 
 impl MonitoringEngine {
@@ -41,26 +47,47 @@ impl MonitoringEngine {
 
         // Stop monitors for removed devices
         let current_ids: Vec<i64> = devices.iter().filter_map(|d| d.id).collect();
-        active_monitors.retain(|id, handle| {
+        active_monitors.retain(|id, entry| {
             if !current_ids.contains(id) {
-                handle.abort();
+                entry.handle.abort();
                 false
             } else {
                 true
             }
         });
 
-        // Start monitors for new devices
+        // Start monitors for new devices and restart monitors when edited
         for device in devices {
             let id = device.id.expect("Device ID is required");
+
+            let should_restart = active_monitors
+                .get(&id)
+                .map(|entry| entry.ip != device.ip || entry.name != device.name)
+                .unwrap_or(false);
+
+            if should_restart {
+                if let Some(old_entry) = active_monitors.remove(&id) {
+                    old_entry.handle.abort();
+                }
+            }
+
             if !active_monitors.contains_key(&id) {
                 let repo = Arc::clone(&self.repository);
                 let app_handle = self.app_handle.clone();
                 let client = Arc::clone(&self.ping_client);
+                let monitor_name = device.name.clone();
+                let monitor_ip = device.ip.clone();
                 let handle = tokio::spawn(async move {
                     run_monitor(app_handle, repo, client, device).await;
                 });
-                active_monitors.insert(id, handle);
+                active_monitors.insert(
+                    id,
+                    MonitorEntry {
+                        handle,
+                        ip: monitor_ip,
+                        name: monitor_name,
+                    },
+                );
             }
         }
 

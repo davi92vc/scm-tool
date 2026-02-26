@@ -55,6 +55,23 @@ async fn remove_device(
     Ok(())
 }
 
+#[tauri::command]
+async fn update_device(
+    id: i64,
+    name: String,
+    ip: String,
+    pool: State<'_, SqlitePool>,
+    engine: State<'_, MonitoringEngine>,
+) -> Result<(), String> {
+    let repo = Repository::new(pool.inner().clone());
+    let service = DeviceService::new(repo);
+    service.update_device(id, &name, &ip).await?;
+
+    engine.sync_devices().await?;
+
+    Ok(())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -64,6 +81,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             get_devices,
             add_device,
+            update_device,
             remove_device
         ])
         .setup(|app| {
