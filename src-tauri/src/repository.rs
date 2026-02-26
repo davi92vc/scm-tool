@@ -1,5 +1,5 @@
+use crate::models::{AppError, Check, Device, Transition};
 use sqlx::SqlitePool;
-use crate::models::{Device, Check, Transition, AppError};
 
 pub struct Repository {
     pool: SqlitePool,
@@ -52,7 +52,7 @@ impl Repository {
     // Checks
     pub async fn insert_check(&self, check: &Check) -> Result<i64, sqlx::Error> {
         let result = sqlx::query(
-            "INSERT INTO checks (device_id, is_online, latency_ms, error_msg) VALUES (?, ?, ?, ?)"
+            "INSERT INTO checks (device_id, is_online, latency_ms, error_msg) VALUES (?, ?, ?, ?)",
         )
         .bind(check.device_id)
         .bind(check.is_online)
@@ -66,7 +66,7 @@ impl Repository {
     // Transitions
     pub async fn insert_transition(&self, transition: &Transition) -> Result<i64, sqlx::Error> {
         let result = sqlx::query(
-            "INSERT INTO transitions (device_id, from_status, to_status) VALUES (?, ?, ?)"
+            "INSERT INTO transitions (device_id, from_status, to_status) VALUES (?, ?, ?)",
         )
         .bind(transition.device_id)
         .bind(&transition.from_status)
@@ -78,13 +78,11 @@ impl Repository {
 
     // Errors
     pub async fn insert_error(&self, error: &AppError) -> Result<i64, sqlx::Error> {
-        let result = sqlx::query(
-            "INSERT INTO app_errors (source, message) VALUES (?, ?)"
-        )
-        .bind(&error.source)
-        .bind(&error.message)
-        .execute(&self.pool)
-        .await?;
+        let result = sqlx::query("INSERT INTO app_errors (source, message) VALUES (?, ?)")
+            .bind(&error.source)
+            .bind(&error.message)
+            .execute(&self.pool)
+            .await?;
         Ok(result.last_insert_rowid())
     }
 }

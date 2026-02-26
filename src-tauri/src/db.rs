@@ -23,9 +23,7 @@ pub async fn init_db(app_handle: &AppHandle) -> Result<SqlitePool, Box<dyn std::
     let pool = SqlitePool::connect_with(options).await?;
 
     // Run migrations
-    sqlx::migrate!("./migrations")
-        .run(&pool)
-        .await?;
+    sqlx::migrate!("./migrations").run(&pool).await?;
 
     // Initial purge
     if let Err(e) = purge_old_data(&pool).await {
@@ -36,17 +34,20 @@ pub async fn init_db(app_handle: &AppHandle) -> Result<SqlitePool, Box<dyn std::
 }
 
 pub async fn purge_old_data(pool: &SqlitePool) -> Result<(), sqlx::Error> {
-    let result_checks = sqlx::query("DELETE FROM checks WHERE timestamp < datetime('now', '-30 days')")
-        .execute(pool)
-        .await?;
+    let result_checks =
+        sqlx::query("DELETE FROM checks WHERE timestamp < datetime('now', '-30 days')")
+            .execute(pool)
+            .await?;
 
-    let result_transitions = sqlx::query("DELETE FROM transitions WHERE timestamp < datetime('now', '-30 days')")
-        .execute(pool)
-        .await?;
+    let result_transitions =
+        sqlx::query("DELETE FROM transitions WHERE timestamp < datetime('now', '-30 days')")
+            .execute(pool)
+            .await?;
 
-    let result_errors = sqlx::query("DELETE FROM app_errors WHERE timestamp < datetime('now', '-30 days')")
-        .execute(pool)
-        .await?;
+    let result_errors =
+        sqlx::query("DELETE FROM app_errors WHERE timestamp < datetime('now', '-30 days')")
+            .execute(pool)
+            .await?;
 
     println!(
         "Purge completed: {} checks, {} transitions, {} errors removed",
@@ -57,5 +58,3 @@ pub async fn purge_old_data(pool: &SqlitePool) -> Result<(), sqlx::Error> {
 
     Ok(())
 }
-
-
