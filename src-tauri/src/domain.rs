@@ -1,4 +1,5 @@
 use crate::repository::Repository;
+use crate::models::AppError;
 use std::net::Ipv4Addr;
 use std::str::FromStr;
 
@@ -11,9 +12,13 @@ impl DeviceService {
         Self { repository }
     }
 
+    pub fn validate_ipv4(ip: &str) -> bool {
+        Ipv4Addr::from_str(ip).is_ok()
+    }
+
     pub async fn create_device(&self, name: &str, ip: &str) -> Result<i64, String> {
         // Rule: Validar IPv4
-        if Ipv4Addr::from_str(ip).is_err() {
+        if !Self::validate_ipv4(ip) {
             return Err("Invalid IPv4 address".to_string());
         }
 
@@ -33,10 +38,20 @@ impl DeviceService {
             return Err("IP address already monitored".to_string());
         }
 
-        self.repository
+        let id = self.repository
             .create_device(name, ip)
             .await
-            .map_err(|e| e.to_string())
+            .map_err(|e| e.to_string())?;
+
+        // Audit log
+        let _ = self.repository.insert_error(&AppError {
+            id: None,
+            source: "AUDIT".to_string(),
+            message: format!("Device added: {} ({}) with ID: {}", name, ip, id),
+            timestamp: None,
+        }).await;
+
+        Ok(id)
     }
 
     pub async fn get_all_devices(&self) -> Result<Vec<crate::models::Device>, String> {
@@ -50,6 +65,30 @@ impl DeviceService {
         self.repository
             .delete_device(id)
             .await
-            .map_err(|e| e.to_string())
+            .map_err(|e| e.to_string())?;
+
+        // Audit log
+        let _ = self.repository.insert_error(&AppError {
+            id: None,
+            source: "AUDIT".to_string(),
+            message: format!("Device removed: {}", id),
+            timestamp: None,
+        }).await;
+
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_validate_ipv4() {
+        assert!(DeviceService::validate_ipv4("1.1.1.1"));
+        assert!(DeviceService::validate_ipv4("192.168.0.254"));
+        assert!(!DeviceService::validate_ipv4("256.256.256.256"));
+        assert!(!DeviceService::validate_ipv4("abc.def.ghi.jkl"));
+        assert!(!DeviceService::validate_ipv4("1.2.3"));
     }
 }
