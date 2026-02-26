@@ -3,6 +3,9 @@
 use tauri::Manager;
 
 mod db;
+mod models;
+mod repository;
+mod domain;
 
 #[tauri::command]
 fn greet(name: &str) -> String {
