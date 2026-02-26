@@ -1,16 +1,33 @@
-import { useState, useEffect } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
-import { 
-  Plus, 
-  Trash2, 
-  Activity, 
-  Wifi, 
-  WifiOff, 
-  Settings,
-  AlertCircle,
-  Clock
-} from 'lucide-react';
+import {
+  Badge,
+  Body1Strong,
+  Button,
+  Caption1,
+  Card,
+  Dialog,
+  DialogActions,
+  DialogBody,
+  DialogContent,
+  DialogSurface,
+  DialogTitle,
+  DialogTrigger,
+  Divider,
+  Field,
+  Input,
+  MessageBar,
+  MessageBarBody,
+  makeStyles,
+  tokens,
+} from '@fluentui/react-components';
+import {
+  Add24Regular,
+  Clock24Regular,
+  Delete24Regular,
+  Settings16Regular,
+} from '@fluentui/react-icons';
 import './App.css';
 
 interface Device {
@@ -26,7 +43,129 @@ interface CheckEvent {
   latency_ms: number;
 }
 
+const useStyles = makeStyles({
+  page: {
+    width: '100%',
+    minHeight: '100vh',
+    padding: '16px',
+    display: 'flex',
+    justifyContent: 'center',
+    backgroundColor: tokens.colorNeutralBackground2,
+  },
+  shell: {
+    width: '100%',
+    maxWidth: '760px',
+    minHeight: 'calc(100vh - 32px)',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '12px',
+  },
+  header: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: '12px',
+  },
+  titleWrap: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '2px',
+  },
+  title: {
+    margin: 0,
+    fontSize: '22px',
+    fontWeight: 600,
+    color: tokens.colorNeutralForeground1,
+  },
+  subtitle: {
+    color: tokens.colorNeutralForeground3,
+  },
+  dialogContent: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '12px',
+  },
+  list: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '10px',
+  },
+  emptyCard: {
+    textAlign: 'center',
+    padding: '24px',
+    color: tokens.colorNeutralForeground3,
+  },
+  deviceCard: {
+    padding: '12px',
+  },
+  deviceRow: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: '12px',
+    width: '100%',
+  },
+  deviceMain: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '12px',
+    minWidth: 0,
+    flex: 1,
+  },
+  deviceInfo: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '2px',
+    minWidth: 0,
+  },
+  ipText: {
+    color: tokens.colorNeutralForeground3,
+  },
+  right: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '10px',
+  },
+  statusBox: {
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'flex-end',
+    gap: '4px',
+  },
+  checkTime: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '4px',
+    color: tokens.colorNeutralForeground3,
+  },
+  statusOnline: {
+    color: tokens.colorPaletteGreenForeground1,
+    fontWeight: 600,
+  },
+  statusOffline: {
+    color: tokens.colorPaletteRedForeground1,
+    fontWeight: 600,
+  },
+  initializing: {
+    color: tokens.colorNeutralForeground3,
+  },
+  footer: {
+    marginTop: 'auto',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    color: tokens.colorNeutralForeground3,
+    paddingTop: '4px',
+  },
+  footerRight: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '4px',
+  },
+});
+
 function App() {
+  const styles = useStyles();
   const [devices, setDevices] = useState<Device[]>([]);
   const [statusMap, setStatusMap] = useState<Record<number, { is_online: boolean, last_check: string, latency?: number }>>({});
   const [isAdding, setIsAdding] = useState(false);
@@ -34,8 +173,19 @@ function App() {
   const [newIp, setNewIp] = useState('');
   const [error, setError] = useState<string | null>(null);
 
+  const fetchDevices = useCallback(async () => {
+    try {
+      const result = await invoke<Device[]>('get_devices');
+      setDevices(result);
+    } catch (e) {
+      console.error(e);
+    }
+  }, []);
+
   useEffect(() => {
-    fetchDevices();
+    const frameId = window.requestAnimationFrame(() => {
+      void fetchDevices();
+    });
 
     const unlistenCheck = listen<CheckEvent>('check-event', (event) => {
       setStatusMap(prev => ({
@@ -54,30 +204,27 @@ function App() {
     });
 
     return () => {
+      window.cancelAnimationFrame(frameId);
       unlistenCheck.then(u => u());
       unlistenTransition.then(u => u());
     };
-  }, []);
+  }, [fetchDevices]);
 
-  const fetchDevices = async () => {
-    try {
-      const result = await invoke<Device[]>('get_devices');
-      setDevices(result);
-    } catch (e) {
-      console.error(e);
-    }
+  const resetAddForm = () => {
+    setNewName('');
+    setNewIp('');
+    setError(null);
   };
 
   const handleAdd = async () => {
     try {
       setError(null);
       await invoke('add_device', { name: newName, ip: newIp });
-      setNewName('');
-      setNewIp('');
+      resetAddForm();
       setIsAdding(false);
       fetchDevices();
-    } catch (e: any) {
-      setError(e.toString());
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : String(e));
     }
   };
 
@@ -90,161 +237,142 @@ function App() {
     }
   };
 
+  const handleDialogOpenChange = (_event: unknown, data: { open: boolean }) => {
+    setIsAdding(data.open);
+    if (!data.open) {
+      resetAddForm();
+    }
+  };
+
+  const maxReached = devices.length >= 4;
+  const canSave = newName.trim().length > 0 && newIp.trim().length > 0;
+
   return (
-    <div className="container" style={{ padding: '1rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-      <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <h1 style={{ fontSize: '1.25rem', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '0.5rem', margin: 0 }}>
-          <Activity size={24} color="#3b82f6" /> SCM Monitor
-        </h1>
-        <button 
-          className="add-btn" 
-          onClick={() => setIsAdding(!isAdding)}
-          disabled={devices.length >= 4}
-          style={{ 
-            display: 'flex', 
-            alignItems: 'center', 
-            gap: '0.25rem', 
-            backgroundColor: '#3b82f6', 
-            color: 'white', 
-            border: 'none', 
-            padding: '0.5rem 1rem', 
-            borderRadius: '0.375rem',
-            cursor: devices.length >= 4 ? 'not-allowed' : 'pointer',
-            opacity: devices.length >= 4 ? 0.5 : 1
-          }}
-        >
-          <Plus size={18} /> Adicionar
-        </button>
-      </header>
+    <div className={styles.page}>
+      <div className={styles.shell}>
+        <header className={styles.header}>
+          <div className={styles.titleWrap}>
+            <h1 className={styles.title}>SCM Monitor</h1>
+            <Caption1 className={styles.subtitle}>Monitor de conectividade em tempo real</Caption1>
+          </div>
 
-      {devices.length >= 4 && !isAdding && (
-        <div style={{ padding: '0.5rem', backgroundColor: '#fef3c7', borderLeft: '4px solid #f59e0b', fontSize: '0.875rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-          <AlertCircle size={14} /> Limite do MVP atingido (máx 4 dispositivos)
-        </div>
-      )}
+          <Dialog open={isAdding} onOpenChange={handleDialogOpenChange}>
+            <DialogTrigger disableButtonEnhancement>
+              <Button appearance="primary" icon={<Add24Regular />} disabled={maxReached}>
+                Adicionar dispositivo
+              </Button>
+            </DialogTrigger>
+            <DialogSurface>
+              <DialogBody>
+                <DialogTitle>Novo dispositivo</DialogTitle>
+                <DialogContent className={styles.dialogContent}>
+                  <Field label="Nome">
+                    <Input
+                      value={newName}
+                      onChange={(_, data) => setNewName(data.value)}
+                      placeholder="Ex: Servidor Principal"
+                    />
+                  </Field>
+                  <Field label="Endereço IP (IPv4)">
+                    <Input
+                      value={newIp}
+                      onChange={(_, data) => setNewIp(data.value)}
+                      placeholder="Ex: 1.1.1.1"
+                    />
+                  </Field>
+                  {error && (
+                    <MessageBar intent="error">
+                      <MessageBarBody>{error}</MessageBarBody>
+                    </MessageBar>
+                  )}
+                </DialogContent>
+                <DialogActions>
+                  <DialogTrigger disableButtonEnhancement>
+                    <Button appearance="secondary">Cancelar</Button>
+                  </DialogTrigger>
+                  <Button appearance="primary" onClick={handleAdd} disabled={!canSave}>
+                    Salvar
+                  </Button>
+                </DialogActions>
+              </DialogBody>
+            </DialogSurface>
+          </Dialog>
+        </header>
 
-      {isAdding && (
-        <div style={{ backgroundColor: 'white', padding: '1rem', border: '1px solid #e2e8f0', borderRadius: '0.5rem', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-          <h3 style={{ margin: 0, fontSize: '1rem' }}>Novo Dispositivo</h3>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
-            <label style={{ fontSize: '0.75rem', fontWeight: 'bold', color: '#64748b' }}>NOME</label>
-            <input 
-              value={newName} 
-              onChange={(e) => setNewName(e.target.value)} 
-              placeholder="Ex: Servidor Principal"
-              style={{ padding: '0.5rem', border: '1px solid #cbd5e1', borderRadius: '0.25rem' }}
-            />
-          </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
-            <label style={{ fontSize: '0.75rem', fontWeight: 'bold', color: '#64748b' }}>ENDEREÇO IP (IPv4)</label>
-            <input 
-              value={newIp} 
-              onChange={(e) => setNewIp(e.target.value)} 
-              placeholder="Ex: 1.1.1.1"
-              style={{ padding: '0.5rem', border: '1px solid #cbd5e1', borderRadius: '0.25rem' }}
-            />
-          </div>
-          {error && <div style={{ color: '#ef4444', fontSize: '0.75rem' }}>{error}</div>}
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem', marginTop: '0.5rem' }}>
-            <button 
-              onClick={() => setIsAdding(false)}
-              style={{ padding: '0.4rem 0.75rem', border: '1px solid #cbd5e1', backgroundColor: 'transparent', borderRadius: '0.25rem', cursor: 'pointer' }}
-            >
-              Cancelar
-            </button>
-            <button 
-              onClick={handleAdd}
-              style={{ padding: '0.4rem 0.75rem', backgroundColor: '#3b82f6', color: 'white', border: 'none', borderRadius: '0.25rem', cursor: 'pointer' }}
-            >
-              Salvar
-            </button>
-          </div>
-        </div>
-      )}
-
-      <div className="device-list" style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-        {devices.length === 0 && !isAdding && (
-          <div style={{ textAlign: 'center', padding: '3rem 0', color: '#94a3b8' }}>
-            <Wifi size={48} strokeWidth={1} style={{ opacity: 0.5, marginBottom: '0.5rem' }} />
-            <p style={{ margin: 0 }}>Nenhum dispositivo monitorado.</p>
-          </div>
+        {maxReached && !isAdding && (
+          <MessageBar intent="warning">
+            <MessageBarBody>Limite do MVP atingido (máx 4 dispositivos).</MessageBarBody>
+          </MessageBar>
         )}
 
-        {devices.map(device => {
-          const status = statusMap[device.id];
-          const isOnline = status?.is_online;
-          
-          return (
-            <div key={device.id} style={{ 
-              backgroundColor: 'white', 
-              padding: '1rem', 
-              border: '1px solid #e2e8f0', 
-              borderRadius: '0.5rem', 
-              display: 'flex', 
-              alignItems: 'center', 
-              justifyContent: 'space-between'
-            }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                <div style={{ 
-                  width: '40px', 
-                  height: '40px', 
-                  borderRadius: '100%', 
-                  display: 'flex', 
-                  alignItems: 'center', 
-                  justifyContent: 'center',
-                  backgroundColor: isOnline === undefined ? '#f1f5f9' : (isOnline ? '#dcfce7' : '#fee2e2'),
-                  color: isOnline === undefined ? '#94a3b8' : (isOnline ? '#166534' : '#991b1b')
-                }}>
-                  {isOnline === false ? <WifiOff size={20} /> : <Wifi size={20} />}
-                </div>
-                <div>
-                  <div style={{ fontWeight: 'bold', fontSize: '1rem' }}>{device.name}</div>
-                  <div style={{ fontSize: '0.8rem', color: '#64748b' }}>{device.ip}</div>
-                </div>
+        <div className={styles.list}>
+          {devices.length === 0 && !isAdding && (
+            <Card>
+              <div className={styles.emptyCard}>
+                <Body1Strong>Nenhum dispositivo monitorado.</Body1Strong>
+                <Caption1>Clique em "Adicionar dispositivo" para começar.</Caption1>
               </div>
-              
-              <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem' }}>
-                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '0.1rem' }}>
-                  {status ? (
-                    <>
-                      <div style={{ fontSize: '0.75rem', color: '#94a3b8', display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
-                        <Clock size={12} /> {status.last_check}
+            </Card>
+          )}
+
+          {devices.map(device => {
+            const status = statusMap[device.id];
+            const isOnline = status?.is_online;
+            const statusText = status ? (isOnline ? 'Online' : 'Offline') : 'Iniciando';
+            const statusColor: 'informative' | 'success' | 'danger' = status
+              ? (isOnline ? 'success' : 'danger')
+              : 'informative';
+
+            return (
+              <Card key={device.id} className={styles.deviceCard}>
+                <div className={styles.deviceRow}>
+                  <div className={styles.deviceMain}>
+                    <Badge color={statusColor} appearance="filled">
+                      {statusText}
+                    </Badge>
+                    <div className={styles.deviceInfo}>
+                      <Body1Strong>{device.name}</Body1Strong>
+                      <Caption1 className={styles.ipText}>{device.ip}</Caption1>
+                    </div>
+                  </div>
+
+                  <div className={styles.right}>
+                    {status ? (
+                      <div className={styles.statusBox}>
+                        <Caption1 className={styles.checkTime}>
+                          <Clock24Regular fontSize={12} />
+                          {status.last_check}
+                        </Caption1>
+                        <Caption1 className={isOnline ? styles.statusOnline : styles.statusOffline}>
+                          {isOnline ? `${status.latency?.toFixed(1) ?? '-'} ms` : 'OFFLINE'}
+                        </Caption1>
                       </div>
-                      <div style={{ fontSize: '0.875rem', fontWeight: 'bold', color: isOnline ? '#16a34a' : '#dc2626' }}>
-                        {isOnline ? `${status.latency?.toFixed(1)} ms` : 'OFFLINE'}
-                      </div>
-                    </>
-                  ) : (
-                    <div style={{ fontSize: '0.75rem', color: '#94a3b8' }}>Iniciando...</div>
-                  )}
+                    ) : (
+                      <Caption1 className={styles.initializing}>Aguardando checagem...</Caption1>
+                    )}
+
+                    <Button
+                      aria-label={`Remover ${device.name}`}
+                      appearance="subtle"
+                      icon={<Delete24Regular />}
+                      onClick={() => handleDelete(device.id)}
+                    />
+                  </div>
                 </div>
-
-                <button 
-                  onClick={() => handleDelete(device.id)}
-                  style={{ 
-                    backgroundColor: 'transparent', 
-                    border: 'none', 
-                    color: '#94a3b8', 
-                    cursor: 'pointer',
-                    padding: '0.5rem'
-                  }}
-                  onMouseOver={(e) => (e.currentTarget.style.color = '#ef4444')}
-                  onMouseOut={(e) => (e.currentTarget.style.color = '#94a3b8')}
-                >
-                  <Trash2 size={18} />
-                </button>
-              </div>
-            </div>
-          );
-        })}
-      </div>
-
-      <footer style={{ marginTop: 'auto', borderTop: '1px solid #e2e8f0', paddingTop: '1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', color: '#94a3b8', fontSize: '0.7rem' }}>
-        <div>SCM-TOOL SYSTEM MONITOR</div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
-          <Settings size={12} /> v1.0.0 (Windows)
+              </Card>
+            );
+          })}
         </div>
-      </footer>
+
+        <Divider />
+        <footer className={styles.footer}>
+          <Caption1>SCM-TOOL SYSTEM MONITOR</Caption1>
+          <div className={styles.footerRight}>
+            <Settings16Regular />
+            <Caption1>v1.0.0 (Windows)</Caption1>
+          </div>
+        </footer>
+      </div>
     </div>
   );
 }
