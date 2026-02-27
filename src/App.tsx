@@ -18,6 +18,7 @@ import {
   Input,
   MessageBar,
   MessageBarBody,
+  Switch,
   makeStyles,
   tokens,
 } from '@fluentui/react-components';
@@ -52,6 +53,12 @@ interface AppError {
 interface NotificationErrorEvent {
   source: string;
   message: string;
+}
+
+interface AppSettings {
+  online_interval_sec: number;
+  offline_interval_sec: number;
+  autostart_enabled: boolean;
 }
 
 const useStyles = makeStyles({
@@ -90,6 +97,11 @@ const useStyles = makeStyles({
   },
   subtitle: {
     color: tokens.colorNeutralForeground3,
+  },
+  headerActions: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
   },
   dialogContent: {
     display: 'flex',
@@ -160,6 +172,17 @@ const useStyles = makeStyles({
   initializing: {
     color: tokens.colorNeutralForeground3,
   },
+  settingsCard: {
+    padding: '16px',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '12px',
+  },
+  settingsActions: {
+    display: 'flex',
+    justifyContent: 'flex-end',
+    gap: '8px',
+  },
   footer: {
     marginTop: 'auto',
     display: 'flex',
@@ -178,6 +201,7 @@ const useStyles = makeStyles({
 function App() {
   const styles = useStyles();
   const [devices, setDevices] = useState<Device[]>([]);
+  const [currentView, setCurrentView] = useState<'monitor' | 'settings'>('monitor');
   const [statusMap, setStatusMap] = useState<Record<number, { is_online: boolean, last_check: string, latency?: number }>>({});
   const [isAdding, setIsAdding] = useState(false);
   const [newName, setNewName] = useState('');
@@ -188,6 +212,13 @@ function App() {
   const [editIp, setEditIp] = useState('');
   const [editError, setEditError] = useState<string | null>(null);
   const [notificationWarning, setNotificationWarning] = useState<string | null>(null);
+  const [settings, setSettings] = useState<AppSettings | null>(null);
+  const [onlineIntervalInput, setOnlineIntervalInput] = useState('');
+  const [offlineIntervalInput, setOfflineIntervalInput] = useState('');
+  const [autostartEnabled, setAutostartEnabled] = useState(false);
+  const [settingsError, setSettingsError] = useState<string | null>(null);
+  const [settingsSuccess, setSettingsSuccess] = useState<string | null>(null);
+  const [isSavingSettings, setIsSavingSettings] = useState(false);
 
   const fetchDevices = useCallback(async () => {
     try {
@@ -198,9 +229,23 @@ function App() {
     }
   }, []);
 
+  const fetchSettings = useCallback(async () => {
+    try {
+      const result = await invoke<AppSettings>('get_settings');
+      setSettings(result);
+      setOnlineIntervalInput(String(result.online_interval_sec));
+      setOfflineIntervalInput(String(result.offline_interval_sec));
+      setAutostartEnabled(result.autostart_enabled);
+      setSettingsError(null);
+    } catch (e: unknown) {
+      setSettingsError(e instanceof Error ? e.message : String(e));
+    }
+  }, []);
+
   useEffect(() => {
     const frameId = window.requestAnimationFrame(() => {
       void fetchDevices();
+      void fetchSettings();
     });
 
     void invoke<AppError[]>('get_app_errors')
@@ -240,7 +285,7 @@ function App() {
       unlistenTransition.then(u => u());
       unlistenNotificationError.then(u => u());
     };
-  }, [fetchDevices]);
+  }, [fetchDevices, fetchSettings]);
 
   const resetAddForm = () => {
     setNewName('');
@@ -315,9 +360,73 @@ function App() {
     }
   };
 
+  const openSettingsView = () => {
+    setCurrentView('settings');
+    setSettingsSuccess(null);
+    void fetchSettings();
+  };
+
+  const openMonitorView = () => {
+    setCurrentView('monitor');
+    setSettingsSuccess(null);
+  };
+
+  const resetSettingsForm = () => {
+    if (!settings) {
+      return;
+    }
+
+    setOnlineIntervalInput(String(settings.online_interval_sec));
+    setOfflineIntervalInput(String(settings.offline_interval_sec));
+    setAutostartEnabled(settings.autostart_enabled);
+    setSettingsError(null);
+    setSettingsSuccess(null);
+  };
+
+  const handleSaveSettings = async () => {
+    const onlineIntervalSec = Number(onlineIntervalInput);
+    const offlineIntervalSec = Number(offlineIntervalInput);
+
+    if (!Number.isFinite(onlineIntervalSec) || onlineIntervalSec <= 0) {
+      setSettingsError('Informe um intervalo online válido (maior que zero).');
+      return;
+    }
+
+    if (!Number.isFinite(offlineIntervalSec) || offlineIntervalSec <= 0) {
+      setSettingsError('Informe um intervalo offline válido (maior que zero).');
+      return;
+    }
+
+    try {
+      setIsSavingSettings(true);
+      setSettingsError(null);
+      const updated = await invoke<AppSettings>('update_settings', {
+        onlineIntervalSec: Math.round(onlineIntervalSec),
+        offlineIntervalSec: Math.round(offlineIntervalSec),
+        autostartEnabled,
+      });
+
+      setSettings(updated);
+      setOnlineIntervalInput(String(updated.online_interval_sec));
+      setOfflineIntervalInput(String(updated.offline_interval_sec));
+      setAutostartEnabled(updated.autostart_enabled);
+      setSettingsSuccess('Configurações salvas com sucesso.');
+      setCurrentView('monitor');
+    } catch (e: unknown) {
+      setSettingsError(e instanceof Error ? e.message : String(e));
+      setSettingsSuccess(null);
+    } finally {
+      setIsSavingSettings(false);
+    }
+  };
+
   const maxReached = devices.length >= 4;
   const canSave = newName.trim().length > 0 && newIp.trim().length > 0;
   const canSaveEdit = editName.trim().length > 0 && editIp.trim().length > 0;
+  const canSaveSettings =
+    onlineIntervalInput.trim().length > 0 &&
+    offlineIntervalInput.trim().length > 0 &&
+    !isSavingSettings;
 
   return (
     <div className={styles.page}>
@@ -325,57 +434,67 @@ function App() {
         <header className={styles.header}>
           <div className={styles.titleWrap}>
             <h1 className={styles.title}>SCM Monitor</h1>
-            <Caption1 className={styles.subtitle}>Monitor de conectividade em tempo real</Caption1>
+            <Caption1 className={styles.subtitle}>
+              {currentView === 'monitor'
+                ? 'Monitor de conectividade em tempo real'
+                : 'Configurações do aplicativo'}
+            </Caption1>
           </div>
 
-          <Dialog open={isAdding} onOpenChange={handleDialogOpenChange}>
-            <DialogTrigger disableButtonEnhancement>
-              <Button appearance="primary" icon={<Add24Regular />} disabled={maxReached}>
-                Adicionar dispositivo
+          {currentView === 'monitor' ? (
+            <div className={styles.headerActions}>
+              <Button appearance="secondary" onClick={openSettingsView}>
+                Configurações
               </Button>
-            </DialogTrigger>
-            <DialogSurface>
-              <DialogBody>
-                <DialogTitle>Novo dispositivo</DialogTitle>
-                <DialogContent className={styles.dialogContent}>
-                  <Field label="Nome">
-                    <Input
-                      value={newName}
-                      onChange={(_, data) => setNewName(data.value)}
-                      placeholder="Ex: Servidor Principal"
-                    />
-                  </Field>
-                  <Field label="Endereço IP (IPv4)">
-                    <Input
-                      value={newIp}
-                      onChange={(_, data) => setNewIp(data.value)}
-                      placeholder="Ex: 1.1.1.1"
-                    />
-                  </Field>
-                  {error && (
-                    <MessageBar intent="error">
-                      <MessageBarBody>{error}</MessageBarBody>
-                    </MessageBar>
-                  )}
-                </DialogContent>
-                <DialogActions>
-                  <DialogTrigger disableButtonEnhancement>
-                    <Button appearance="secondary">Cancelar</Button>
-                  </DialogTrigger>
-                  <Button appearance="primary" onClick={handleAdd} disabled={!canSave}>
-                    Salvar
-                  </Button>
-                </DialogActions>
-              </DialogBody>
-            </DialogSurface>
-          </Dialog>
-        </header>
 
-        {maxReached && !isAdding && (
-          <MessageBar intent="warning">
-            <MessageBarBody>Limite do MVP atingido (máx 4 dispositivos).</MessageBarBody>
-          </MessageBar>
-        )}
+              <Dialog open={isAdding} onOpenChange={handleDialogOpenChange}>
+                <DialogTrigger disableButtonEnhancement>
+                  <Button appearance="primary" icon={<Add24Regular />} disabled={maxReached}>
+                    Adicionar dispositivo
+                  </Button>
+                </DialogTrigger>
+                <DialogSurface>
+                  <DialogBody>
+                    <DialogTitle>Novo dispositivo</DialogTitle>
+                    <DialogContent className={styles.dialogContent}>
+                      <Field label="Nome">
+                        <Input
+                          value={newName}
+                          onChange={(_, data) => setNewName(data.value)}
+                          placeholder="Ex: Servidor Principal"
+                        />
+                      </Field>
+                      <Field label="Endereço IP (IPv4)">
+                        <Input
+                          value={newIp}
+                          onChange={(_, data) => setNewIp(data.value)}
+                          placeholder="Ex: 1.1.1.1"
+                        />
+                      </Field>
+                      {error && (
+                        <MessageBar intent="error">
+                          <MessageBarBody>{error}</MessageBarBody>
+                        </MessageBar>
+                      )}
+                    </DialogContent>
+                    <DialogActions>
+                      <DialogTrigger disableButtonEnhancement>
+                        <Button appearance="secondary">Cancelar</Button>
+                      </DialogTrigger>
+                      <Button appearance="primary" onClick={handleAdd} disabled={!canSave}>
+                        Salvar
+                      </Button>
+                    </DialogActions>
+                  </DialogBody>
+                </DialogSurface>
+              </Dialog>
+            </div>
+          ) : (
+            <Button appearance="secondary" onClick={openMonitorView}>
+              Voltar
+            </Button>
+          )}
+        </header>
 
         {notificationWarning && (
           <MessageBar intent="warning">
@@ -383,107 +502,170 @@ function App() {
           </MessageBar>
         )}
 
-        <Dialog open={editingDeviceId !== null} onOpenChange={handleEditDialogOpenChange}>
-          <DialogSurface>
-            <DialogBody>
-              <DialogTitle>Editar dispositivo</DialogTitle>
-              <DialogContent className={styles.dialogContent}>
-                <Field label="Nome">
-                  <Input
-                    value={editName}
-                    onChange={(_, data) => setEditName(data.value)}
-                    placeholder="Ex: Servidor Principal"
-                  />
-                </Field>
-                <Field label="Endereço IP (IPv4)">
-                  <Input
-                    value={editIp}
-                    onChange={(_, data) => setEditIp(data.value)}
-                    placeholder="Ex: 1.1.1.1"
-                  />
-                </Field>
-                {editError && (
-                  <MessageBar intent="error">
-                    <MessageBarBody>{editError}</MessageBarBody>
-                  </MessageBar>
-                )}
-              </DialogContent>
-              <DialogActions>
-                <DialogTrigger disableButtonEnhancement>
-                  <Button appearance="secondary">Cancelar</Button>
-                </DialogTrigger>
-                <Button appearance="primary" onClick={handleEdit} disabled={!canSaveEdit}>
-                  Salvar alterações
-                </Button>
-              </DialogActions>
-            </DialogBody>
-          </DialogSurface>
-        </Dialog>
+        {currentView === 'monitor' ? (
+          <>
+            {maxReached && !isAdding && (
+              <MessageBar intent="warning">
+                <MessageBarBody>Limite do MVP atingido (máx 4 dispositivos).</MessageBarBody>
+              </MessageBar>
+            )}
 
-        <div className={styles.list}>
-          {devices.length === 0 && !isAdding && (
-            <Card>
-              <div className={styles.emptyCard}>
-                <Body1Strong>Nenhum dispositivo monitorado.</Body1Strong>
-                <Caption1>Clique em "Adicionar dispositivo" para começar.</Caption1>
-              </div>
-            </Card>
-          )}
-
-          {devices.map(device => {
-            const status = statusMap[device.id];
-            const isOnline = status?.is_online;
-            const statusText = status ? (isOnline ? 'Online' : 'Offline') : 'Iniciando';
-            const statusColor: 'informative' | 'success' | 'danger' = status
-              ? (isOnline ? 'success' : 'danger')
-              : 'informative';
-
-            return (
-              <Card key={device.id} className={styles.deviceCard}>
-                <div className={styles.deviceRow}>
-                  <div className={styles.deviceMain}>
-                    <Badge color={statusColor} appearance="filled">
-                      {statusText}
-                    </Badge>
-                    <div className={styles.deviceInfo}>
-                      <Body1Strong>{device.name}</Body1Strong>
-                      <Caption1 className={styles.ipText}>{device.ip}</Caption1>
-                    </div>
-                  </div>
-
-                  <div className={styles.right}>
-                    {status ? (
-                      <div className={styles.statusBox}>
-                        <Caption1 className={styles.checkTime}>
-                          <Clock24Regular fontSize={12} />
-                          {status.last_check}
-                        </Caption1>
-                        <Caption1 className={isOnline ? styles.statusOnline : styles.statusOffline}>
-                          {isOnline ? `${status.latency?.toFixed(1) ?? '-'} ms` : 'OFFLINE'}
-                        </Caption1>
-                      </div>
-                    ) : (
-                      <Caption1 className={styles.initializing}>Aguardando checagem...</Caption1>
+            <Dialog open={editingDeviceId !== null} onOpenChange={handleEditDialogOpenChange}>
+              <DialogSurface>
+                <DialogBody>
+                  <DialogTitle>Editar dispositivo</DialogTitle>
+                  <DialogContent className={styles.dialogContent}>
+                    <Field label="Nome">
+                      <Input
+                        value={editName}
+                        onChange={(_, data) => setEditName(data.value)}
+                        placeholder="Ex: Servidor Principal"
+                      />
+                    </Field>
+                    <Field label="Endereço IP (IPv4)">
+                      <Input
+                        value={editIp}
+                        onChange={(_, data) => setEditIp(data.value)}
+                        placeholder="Ex: 1.1.1.1"
+                      />
+                    </Field>
+                    {editError && (
+                      <MessageBar intent="error">
+                        <MessageBarBody>{editError}</MessageBarBody>
+                      </MessageBar>
                     )}
+                  </DialogContent>
+                  <DialogActions>
+                    <DialogTrigger disableButtonEnhancement>
+                      <Button appearance="secondary">Cancelar</Button>
+                    </DialogTrigger>
+                    <Button appearance="primary" onClick={handleEdit} disabled={!canSaveEdit}>
+                      Salvar alterações
+                    </Button>
+                  </DialogActions>
+                </DialogBody>
+              </DialogSurface>
+            </Dialog>
 
-                    <Button
-                      aria-label={`Editar ${device.name}`}
-                      appearance="subtle"
-                      icon={<Edit24Regular />}
-                      onClick={() => openEditForm(device)}
-                    />
-                    <Button
-                      aria-label={`Remover ${device.name}`}
-                      appearance="subtle"
-                      icon={<Delete24Regular />}
-                      onClick={() => handleDelete(device.id)}
-                    />
+            <div className={styles.list}>
+              {devices.length === 0 && !isAdding && (
+                <Card>
+                  <div className={styles.emptyCard}>
+                    <Body1Strong>Nenhum dispositivo monitorado.</Body1Strong>
+                    <Caption1>Clique em "Adicionar dispositivo" para começar.</Caption1>
                   </div>
-                </div>
-              </Card>
-            );
-          })}
-        </div>
+                </Card>
+              )}
+
+              {devices.map(device => {
+                const status = statusMap[device.id];
+                const isOnline = status?.is_online;
+                const statusText = status ? (isOnline ? 'Online' : 'Offline') : 'Iniciando';
+                const statusColor: 'informative' | 'success' | 'danger' = status
+                  ? (isOnline ? 'success' : 'danger')
+                  : 'informative';
+
+                return (
+                  <Card key={device.id} className={styles.deviceCard}>
+                    <div className={styles.deviceRow}>
+                      <div className={styles.deviceMain}>
+                        <Badge color={statusColor} appearance="filled">
+                          {statusText}
+                        </Badge>
+                        <div className={styles.deviceInfo}>
+                          <Body1Strong>{device.name}</Body1Strong>
+                          <Caption1 className={styles.ipText}>{device.ip}</Caption1>
+                        </div>
+                      </div>
+
+                      <div className={styles.right}>
+                        {status ? (
+                          <div className={styles.statusBox}>
+                            <Caption1 className={styles.checkTime}>
+                              <Clock24Regular fontSize={12} />
+                              {status.last_check}
+                            </Caption1>
+                            <Caption1 className={isOnline ? styles.statusOnline : styles.statusOffline}>
+                              {isOnline ? `${status.latency?.toFixed(1) ?? '-'} ms` : 'OFFLINE'}
+                            </Caption1>
+                          </div>
+                        ) : (
+                          <Caption1 className={styles.initializing}>Aguardando checagem...</Caption1>
+                        )}
+
+                        <Button
+                          aria-label={`Editar ${device.name}`}
+                          appearance="subtle"
+                          icon={<Edit24Regular />}
+                          onClick={() => openEditForm(device)}
+                        />
+                        <Button
+                          aria-label={`Remover ${device.name}`}
+                          appearance="subtle"
+                          icon={<Delete24Regular />}
+                          onClick={() => handleDelete(device.id)}
+                        />
+                      </div>
+                    </div>
+                  </Card>
+                );
+              })}
+            </div>
+          </>
+        ) : (
+          <Card className={styles.settingsCard}>
+            <Body1Strong>Configurações gerais</Body1Strong>
+
+            <Field label="Inicialização com o sistema">
+              <Switch
+                checked={autostartEnabled}
+                onChange={(_, data) => setAutostartEnabled(data.checked)}
+                label={autostartEnabled ? 'Ativado' : 'Desativado'}
+              />
+            </Field>
+
+            <Field label="Intervalo quando online (segundos)">
+              <Input
+                type="number"
+                min={1}
+                value={onlineIntervalInput}
+                onChange={(_, data) => setOnlineIntervalInput(data.value)}
+                placeholder="Ex: 10"
+              />
+            </Field>
+
+            <Field label="Intervalo quando offline (segundos)">
+              <Input
+                type="number"
+                min={1}
+                value={offlineIntervalInput}
+                onChange={(_, data) => setOfflineIntervalInput(data.value)}
+                placeholder="Ex: 2"
+              />
+            </Field>
+
+            {settingsError && (
+              <MessageBar intent="error">
+                <MessageBarBody>{settingsError}</MessageBarBody>
+              </MessageBar>
+            )}
+
+            {settingsSuccess && (
+              <MessageBar intent="success">
+                <MessageBarBody>{settingsSuccess}</MessageBarBody>
+              </MessageBar>
+            )}
+
+            <div className={styles.settingsActions}>
+              <Button appearance="secondary" onClick={resetSettingsForm} disabled={!settings}>
+                Reverter
+              </Button>
+              <Button appearance="primary" onClick={handleSaveSettings} disabled={!canSaveSettings}>
+                {isSavingSettings ? 'Salvando...' : 'Salvar configurações'}
+              </Button>
+            </div>
+          </Card>
+        )}
 
         <footer className={styles.footer}>
           <Caption1>SCM-TOOL</Caption1>

@@ -1,13 +1,14 @@
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
 
 use crate::domain::DeviceService;
-use crate::models::{AppError, Device};
+use crate::models::{AppError, AppSettings, Device};
 use crate::monitor::MonitoringEngine;
 use crate::repository::Repository;
 use sqlx::SqlitePool;
 use tauri::menu::{Menu, MenuItem};
 use tauri::tray::TrayIconBuilder;
 use tauri::{Manager, State};
+use tauri_plugin_autostart::ManagerExt;
 
 mod db;
 mod domain;
@@ -27,6 +28,85 @@ async fn get_app_errors(pool: State<'_, SqlitePool>) -> Result<Vec<AppError>, St
     let repo = Repository::new(pool.inner().clone());
     let service = DeviceService::new(repo);
     service.get_app_errors(25).await
+}
+
+#[tauri::command]
+async fn get_settings(
+    pool: State<'_, SqlitePool>,
+    app_handle: tauri::AppHandle,
+) -> Result<AppSettings, String> {
+    let repo = Repository::new(pool.inner().clone());
+    let service = DeviceService::new(repo);
+    let mut settings = service.get_or_create_app_settings().await?;
+
+    if let Ok(autostart_enabled) = app_handle.autolaunch().is_enabled() {
+        if settings.autostart_enabled != autostart_enabled {
+            settings = service
+                .update_app_settings(
+                    settings.online_interval_sec,
+                    settings.offline_interval_sec,
+                    autostart_enabled,
+                )
+                .await?;
+        }
+    }
+
+    Ok(settings)
+}
+
+#[tauri::command]
+async fn update_settings(
+    online_interval_sec: i64,
+    offline_interval_sec: i64,
+    autostart_enabled: bool,
+    pool: State<'_, SqlitePool>,
+    engine: State<'_, MonitoringEngine>,
+    app_handle: tauri::AppHandle,
+) -> Result<AppSettings, String> {
+    DeviceService::validate_monitoring_intervals(online_interval_sec, offline_interval_sec)?;
+
+    let current_autostart = app_handle
+        .autolaunch()
+        .is_enabled()
+        .map_err(|e| e.to_string())?;
+
+    if autostart_enabled && !current_autostart {
+        app_handle
+            .autolaunch()
+            .enable()
+            .map_err(|e| e.to_string())?;
+    } else if !autostart_enabled && current_autostart {
+        if let Err(error) = app_handle.autolaunch().disable() {
+            let message = error.to_string();
+            if !message.contains("os error 2") {
+                return Err(message);
+            }
+        }
+    }
+
+    let effective_autostart = app_handle
+        .autolaunch()
+        .is_enabled()
+        .map_err(|e| e.to_string())?;
+
+    let repo = Repository::new(pool.inner().clone());
+    let service = DeviceService::new(repo);
+    let settings = service
+        .update_app_settings(
+            online_interval_sec,
+            offline_interval_sec,
+            effective_autostart,
+        )
+        .await?;
+
+    engine
+        .update_intervals(
+            settings.online_interval_sec as u64,
+            settings.offline_interval_sec as u64,
+        )
+        .await?;
+
+    Ok(settings)
 }
 
 #[tauri::command]
@@ -88,6 +168,8 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             get_devices,
             get_app_errors,
+            get_settings,
+            update_settings,
             add_device,
             update_device,
             remove_device
@@ -137,8 +219,35 @@ pub fn run() {
                 let pool = db::init_db(&app_handle)
                     .await
                     .expect("failed to initialize database");
+
+                let settings_service = DeviceService::new(Repository::new(pool.clone()));
+                let mut settings = settings_service
+                    .get_or_create_app_settings()
+                    .await
+                    .expect("failed to load app settings");
+
+                if let Ok(autostart_enabled) = app_handle.autolaunch().is_enabled() {
+                    if settings.autostart_enabled != autostart_enabled {
+                        settings = settings_service
+                            .update_app_settings(
+                                settings.online_interval_sec,
+                                settings.offline_interval_sec,
+                                autostart_enabled,
+                            )
+                            .await
+                            .expect("failed to sync autostart setting");
+                    }
+                }
+
                 let repo = Repository::new(pool.clone());
                 let engine = MonitoringEngine::new(app_handle.clone(), repo);
+
+                engine
+                    .set_intervals(
+                        settings.online_interval_sec as u64,
+                        settings.offline_interval_sec as u64,
+                    )
+                    .await;
 
                 // Initial sync
                 engine

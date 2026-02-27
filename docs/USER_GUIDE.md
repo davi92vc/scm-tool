@@ -16,16 +16,24 @@ O **SCM-TOOL SYSTEM MONITOR** é uma aplicação para Windows desenvolvida para 
 
 - **Online (Verde):** O dispositivo está respondendo aos pings.
 - **Offline (Vermelho):** O dispositivo falhou em 1 tentativa de ping.
+- **Intervalos configuráveis:** Você pode ajustar os intervalos de monitoramento para os estados online e offline na tela de configurações.
 - **Latência:** Exibe o tempo de resposta em milissegundos.
 - **Timestamp:** Mostra o horário da última verificação.
 
-### 3. Notificações
+### 3. Configurações
+
+- Clique em **Configurações** na tela principal para abrir a página de configuração.
+- Ative ou desative **Iniciar com o sistema** para controlar a execução automática no login do Windows.
+- Ajuste os campos **Intervalo quando online (segundos)** e **Intervalo quando offline (segundos)**.
+- Ao salvar, as alterações são aplicadas imediatamente.
+
+### 4. Notificações
 
 - O app mostra notificação nativa do Windows quando um dispositivo muda de Online para Offline (ou vice-versa).
 - O app também notifica no primeiro status detectado após iniciar o monitoramento.
 - Se o Windows bloquear/falhar a notificação nativa, a aplicação mostra um aviso visual na tela e registra o erro internamente.
 
-### 4. Segundo Plano (Tray)
+### 5. Segundo Plano (Tray)
 
 - Ao fechar a janela (clicando no X), a aplicação continua rodando em segundo plano.
 - Você pode encontrar o ícone na área de notificação do Windows (perto do relógio).
@@ -34,7 +42,7 @@ O **SCM-TOOL SYSTEM MONITOR** é uma aplicação para Windows desenvolvida para 
 - O ícone padrão é mantido quando não há dispositivos ou enquanto algum dispositivo ainda está em estado inicial.
 - Clique com o botão direito para abrir ou sair da aplicação.
 
-### 5. Histórico e Limpeza
+### 6. Histórico e Limpeza
 
 - A aplicação mantém logs e histórico de conectividade por **30 dias**.
 - Dados mais antigos de 30 dias são removidos automaticamente para economizar espaço.

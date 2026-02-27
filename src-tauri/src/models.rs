@@ -35,3 +35,12 @@ pub struct AppError {
     pub message: String,
     pub timestamp: Option<String>,
 }
+
+#[derive(Debug, Serialize, Deserialize, sqlx::FromRow, Clone)]
+pub struct AppSettings {
+    pub id: Option<i64>,
+    pub online_interval_sec: i64,
+    pub offline_interval_sec: i64,
+    pub autostart_enabled: bool,
+    pub updated_at: Option<String>,
+}

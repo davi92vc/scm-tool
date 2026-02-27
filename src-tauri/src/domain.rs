@@ -1,7 +1,10 @@
 use crate::repository::Repository;
-use crate::models::AppError;
+use crate::models::{AppError, AppSettings};
 use std::net::Ipv4Addr;
 use std::str::FromStr;
+
+pub const DEFAULT_ONLINE_INTERVAL_SEC: i64 = 10;
+pub const DEFAULT_OFFLINE_INTERVAL_SEC: i64 = 2;
 
 pub struct DeviceService {
     repository: Repository,
@@ -116,6 +119,79 @@ impl DeviceService {
             .list_app_errors(limit)
             .await
             .map_err(|e| e.to_string())
+    }
+
+    pub fn validate_monitoring_intervals(
+        online_interval_sec: i64,
+        offline_interval_sec: i64,
+    ) -> Result<(), String> {
+        if online_interval_sec <= 0 {
+            return Err("O intervalo online deve ser maior que zero".to_string());
+        }
+
+        if offline_interval_sec <= 0 {
+            return Err("O intervalo offline deve ser maior que zero".to_string());
+        }
+
+        Ok(())
+    }
+
+    pub async fn get_or_create_app_settings(&self) -> Result<AppSettings, String> {
+        if let Some(settings) = self
+            .repository
+            .get_app_settings()
+            .await
+            .map_err(|e| e.to_string())?
+        {
+            return Ok(settings);
+        }
+
+        let default_settings = AppSettings {
+            id: Some(1),
+            online_interval_sec: DEFAULT_ONLINE_INTERVAL_SEC,
+            offline_interval_sec: DEFAULT_OFFLINE_INTERVAL_SEC,
+            autostart_enabled: false,
+            updated_at: None,
+        };
+
+        self.repository
+            .upsert_app_settings(&default_settings)
+            .await
+            .map_err(|e| e.to_string())?;
+
+        self.repository
+            .get_app_settings()
+            .await
+            .map_err(|e| e.to_string())?
+            .ok_or_else(|| "Falha ao carregar configurações".to_string())
+    }
+
+    pub async fn update_app_settings(
+        &self,
+        online_interval_sec: i64,
+        offline_interval_sec: i64,
+        autostart_enabled: bool,
+    ) -> Result<AppSettings, String> {
+        Self::validate_monitoring_intervals(online_interval_sec, offline_interval_sec)?;
+
+        let settings = AppSettings {
+            id: Some(1),
+            online_interval_sec,
+            offline_interval_sec,
+            autostart_enabled,
+            updated_at: None,
+        };
+
+        self.repository
+            .upsert_app_settings(&settings)
+            .await
+            .map_err(|e| e.to_string())?;
+
+        self.repository
+            .get_app_settings()
+            .await
+            .map_err(|e| e.to_string())?
+            .ok_or_else(|| "Falha ao carregar configurações atualizadas".to_string())
     }
 }
 

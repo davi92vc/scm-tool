@@ -10,19 +10,20 @@ O **SCM-TOOL SYSTEM MONITOR** é construído usando **Tauri v2**, **Rust** no ba
 - **Tray Status Aggregator:** Calcula estado agregado dos dispositivos e atualiza ícone da tray em runtime (verde quando todos online, vermelho quando há offline, neutro no estado inicial/sem devices).
 - **MonitoringEngine:** Um executor assíncrono (usa `tokio`) que spawnava tarefas independentes para cada dispositivo monitorado.
   - **Algoritmo de Checagem:**
-    - **Status Online:** Verifica a cada 10 segundos.
+    - **Status Online:** Verifica conforme intervalo configurado (padrão 10 segundos).
     - **Status Offline:** Se falhar 1 vez, muda para Offline.
-    - **Recuperação:** Verifica a cada 2 segundos no modo offline para detecção rápida de retorno (em menos de 3 segundos como planejado).
+    - **Recuperação:** Verifica conforme intervalo configurado para offline (padrão 2 segundos).
 - **ICMP Service (`surge-ping`):** Usado para enviar pings reais de rede.
-- **SQLite Database (`sqlx`):** Armazena configurações de dispositivos, histórico de `checks`, `transitions` e `app_errors`.
+- **SQLite Database (`sqlx`):** Armazena configurações de dispositivos, histórico de `checks`, `transitions`, `app_errors` e `app_settings`.
   - **WAL Mode:** Configurado para suportar concorrência de leitura/escrita rápida.
   - **Purge Automático:** Uma tarefa limpa registros com mais de 30 dias na inicialização.
+- **Autostart Plugin (`tauri-plugin-autostart`):** Controla habilitar/desabilitar inicialização com o sistema e mantém espelho de estado em `app_settings`.
 
 ### 2. Frontend (React)
 
 - **State Management:** Usa `useState` e `useEffect` do React para gerenciar os dispositivos.
 - **Tauri Events:** Escuta eventos assíncronos enviados pelo backend (`check-event` e `transition-event`) via `listen`.
-- **Tauri Commands:** Chama funções do backend (`get_devices`, `add_device`, `remove_device`) via `invoke`.
+- **Tauri Commands:** Chama funções do backend (`get_devices`, `add_device`, `remove_device`, `get_settings`, `update_settings`) via `invoke`.
 - **UI Components:** Estilizados com CSS moderno e ícones do `lucide-react`.
 
 ### 3. Fluxo de Dados

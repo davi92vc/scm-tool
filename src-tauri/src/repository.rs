@@ -1,4 +1,4 @@
-use crate::models::{AppError, Check, Device, Transition};
+use crate::models::{AppError, AppSettings, Check, Device, Transition};
 use sqlx::SqlitePool;
 
 pub struct Repository {
@@ -93,5 +93,33 @@ impl Repository {
         .bind(limit)
         .fetch_all(&self.pool)
         .await
+    }
+
+    pub async fn get_app_settings(&self) -> Result<Option<AppSettings>, sqlx::Error> {
+        sqlx::query_as::<_, AppSettings>(
+            "SELECT id, online_interval_sec, offline_interval_sec, autostart_enabled, updated_at
+             FROM app_settings WHERE id = 1 LIMIT 1",
+        )
+        .fetch_optional(&self.pool)
+        .await
+    }
+
+    pub async fn upsert_app_settings(&self, settings: &AppSettings) -> Result<(), sqlx::Error> {
+        sqlx::query(
+            "INSERT INTO app_settings (id, online_interval_sec, offline_interval_sec, autostart_enabled, updated_at)
+             VALUES (1, ?, ?, ?, CURRENT_TIMESTAMP)
+             ON CONFLICT(id) DO UPDATE SET
+               online_interval_sec = excluded.online_interval_sec,
+               offline_interval_sec = excluded.offline_interval_sec,
+               autostart_enabled = excluded.autostart_enabled,
+               updated_at = CURRENT_TIMESTAMP",
+        )
+        .bind(settings.online_interval_sec)
+        .bind(settings.offline_interval_sec)
+        .bind(settings.autostart_enabled)
+        .execute(&self.pool)
+        .await?;
+
+        Ok(())
     }
 }

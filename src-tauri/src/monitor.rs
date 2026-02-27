@@ -29,12 +29,19 @@ enum TrayStatus {
     HasOffline,
 }
 
+#[derive(Clone, Copy)]
+struct MonitoringIntervals {
+    online_interval_sec: u64,
+    offline_interval_sec: u64,
+}
+
 pub struct MonitoringEngine {
     app_handle: AppHandle,
     repository: Arc<Repository>,
     active_monitors: Arc<Mutex<HashMap<i64, MonitorEntry>>>,
     device_states: Arc<Mutex<HashMap<i64, Option<bool>>>>,
     tray_status: Arc<Mutex<TrayStatus>>,
+    monitoring_intervals: Arc<Mutex<MonitoringIntervals>>,
     ping_client: Arc<Client>,
 }
 
@@ -55,8 +62,48 @@ impl MonitoringEngine {
             active_monitors: Arc::new(Mutex::new(HashMap::new())),
             device_states: Arc::new(Mutex::new(HashMap::new())),
             tray_status: Arc::new(Mutex::new(TrayStatus::Neutral)),
+            monitoring_intervals: Arc::new(Mutex::new(MonitoringIntervals {
+                online_interval_sec: 10,
+                offline_interval_sec: 2,
+            })),
             ping_client: Arc::new(client),
         }
+    }
+
+    pub async fn set_intervals(&self, online_interval_sec: u64, offline_interval_sec: u64) {
+        let mut intervals = self.monitoring_intervals.lock().await;
+        intervals.online_interval_sec = online_interval_sec.max(1);
+        intervals.offline_interval_sec = offline_interval_sec.max(1);
+    }
+
+    pub async fn update_intervals(
+        &self,
+        online_interval_sec: u64,
+        offline_interval_sec: u64,
+    ) -> Result<(), String> {
+        self.set_intervals(online_interval_sec, offline_interval_sec).await;
+
+        {
+            let mut active_monitors = self.active_monitors.lock().await;
+            for entry in active_monitors.values() {
+                entry.handle.abort();
+            }
+            active_monitors.clear();
+        }
+
+        {
+            let mut states = self.device_states.lock().await;
+            states.clear();
+        }
+
+        refresh_tray_icon(
+            &self.app_handle,
+            Arc::clone(&self.device_states),
+            Arc::clone(&self.tray_status),
+        )
+        .await;
+
+        self.sync_devices().await
     }
 
     pub async fn sync_devices(&self) -> Result<(), String> {
@@ -103,11 +150,21 @@ impl MonitoringEngine {
                 let client = Arc::clone(&self.ping_client);
                 let states = Arc::clone(&self.device_states);
                 let tray_status = Arc::clone(&self.tray_status);
+                let monitoring_intervals = Arc::clone(&self.monitoring_intervals);
                 let monitor_name = device.name.clone();
                 let monitor_ip = device.ip.clone();
                 device_states.entry(id).or_insert(None);
                 let handle = tokio::spawn(async move {
-                    run_monitor(app_handle, repo, client, states, tray_status, device).await;
+                    run_monitor(
+                        app_handle,
+                        repo,
+                        client,
+                        states,
+                        tray_status,
+                        monitoring_intervals,
+                        device,
+                    )
+                    .await;
                 });
                 active_monitors.insert(
                     id,
@@ -140,6 +197,7 @@ async fn run_monitor(
     client: Arc<Client>,
     device_states: Arc<Mutex<HashMap<i64, Option<bool>>>>,
     tray_status: Arc<Mutex<TrayStatus>>,
+    monitoring_intervals: Arc<Mutex<MonitoringIntervals>>,
     device: Device,
 ) {
     let device_id = device.id.unwrap();
@@ -194,7 +252,7 @@ async fn run_monitor(
                 &app_handle,
                 &repo,
                 &device,
-                format!(""),
+                format!("Status inicial detectado: {}", device.name),
                 format!(
                     "O dispositivo {} (IP: {}) está {}.",
                     device.name, device.ip, status_text
@@ -251,10 +309,11 @@ async fn run_monitor(
         }
 
         // Wait based on status
+        let intervals = *monitoring_intervals.lock().await;
         let interval = if is_online {
-            Duration::from_secs(10)
+            Duration::from_secs(intervals.online_interval_sec)
         } else {
-            Duration::from_secs(2)
+            Duration::from_secs(intervals.offline_interval_sec)
         };
 
         sleep(interval).await;
