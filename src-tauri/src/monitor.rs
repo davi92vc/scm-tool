@@ -194,7 +194,7 @@ async fn run_monitor(
                 &app_handle,
                 &repo,
                 &device,
-                format!("Status inicial detectado: {}", device.name),
+                format!(""),
                 format!(
                     "O dispositivo {} (IP: {}) está {}.",
                     device.name, device.ip, status_text
