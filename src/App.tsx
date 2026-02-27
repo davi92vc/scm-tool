@@ -14,7 +14,6 @@ import {
   DialogSurface,
   DialogTitle,
   DialogTrigger,
-  Divider,
   Field,
   Input,
   MessageBar,
@@ -27,7 +26,6 @@ import {
   Clock24Regular,
   Delete24Regular,
   Edit24Regular,
-  Settings16Regular,
 } from '@fluentui/react-icons';
 import './App.css';
 
